@@ -48,11 +48,13 @@ The metadata and selected route persist in native SQLite, scoped by the configur
 
 Bootstrap refresh removes cached route manifests for routes that are no longer published. An offline phone retains its last saved content until it refreshes. This cache is not an entitlement or immediate revocation system.
 
-## Driver identity remains a backend task
+## Driver authentication
 
-The reviewed mobile endpoints are intentionally unauthenticated and expose published routes. The backend's administrator login is not a driver login contract. This implementation does not send administrator credentials or invent a token exchange.
+The app signs in through `/mobile/auth/login` using a mobile-driver account created by an administrator. This identity is separate from the backend administrator/application-user identity. Access and rotating refresh tokens, together with the installation identifier, are stored in Expo SecureStore on native devices.
 
-Before adding the UX sign-in flow, define driver authentication, refresh/revocation behavior, the driver profile, and route assignment rules. Then add secure token storage and authorization headers to the adapter. A separate playback-history contract is also needed if the Records screen becomes active.
+All `/mobile/announcements/*` requests include the mobile bearer token. A 401 triggers one serialized refresh and one request retry. Deactivation, deletion, session revocation, or an invalid device binding clears local authentication and returns the driver to Login. The app revalidates when returning to the foreground.
+
+The first successful login binds the account to the generated installation identifier. A different phone is rejected until an administrator uses Reset Device. Android app removal also removes SecureStore data, so reinstalling may require a reset.
 
 Quick buttons currently match common audio titles containing `lunch`, `dinner`, or `toilet`/`washroom`, case-insensitively. All common audio is available in the library. A stable backend `purpose` field would make localized quick-button mapping reliable.
 

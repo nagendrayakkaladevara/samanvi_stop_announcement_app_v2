@@ -12,7 +12,9 @@
     },
     "android": {
       "package": "com.samanvitravels.driver.v2",
-      "blockedPermissions": ["android.permission.RECORD_AUDIO"]
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -37,7 +39,9 @@
         {
           "backgroundColor": "#F5F5F7"
         }
-      ]
+      ],
+      "expo-secure-store",
+      "expo-font"
     ],
     "scheme": "samanvi-driver-v2"
   }

@@ -1,0 +1,16 @@
+{
+  "date": "2026-09-26",
+  "platform": "Chromium browser preview",
+  "checks": [
+    "Welcome, bundled demo initialization, and Home",
+    "Unknown audio output blocks ordinary playback",
+    "Explicit device test plays real sample audio; pause, resume, restart, stop",
+    "Route search, empty state, clear search, selection, and stop list",
+    "Settings switches and Records coming-soon screen",
+    "Four real audio files available, refresh, and Help",
+    "Onboarding and both preferences survive reload",
+    "Playback survives screen navigation and mini-player controls work",
+    "320px viewport has no horizontal document overflow"
+  ],
+  "pageErrors": []
+}

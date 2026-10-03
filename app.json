@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "Samanvi Driver",
+    "slug": "samanvi-driver-mobile",
+    "version": "2.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/app-icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.samanvitravels.driver.v2"
+    },
+    "android": {
+      "package": "com.samanvitravels.driver.v2",
+      "blockedPermissions": ["android.permission.RECORD_AUDIO"]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "name": "Samanvi Driver"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "enableBackgroundPlayback": true,
+          "enableBackgroundRecording": false
+        }
+      ],
+      "expo-sqlite",
+      "expo-asset",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#F5F5F7"
+        }
+      ]
+    ],
+    "scheme": "samanvi-driver-v2"
+  }
+}

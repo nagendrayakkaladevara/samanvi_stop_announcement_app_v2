@@ -1,0 +1,13 @@
+{
+  "date": "2026-09-27",
+  "scope": "Browser preview; no native hardware",
+  "checks": [
+    "Onboarding scrolls on small screens; unavailable quick action is disabled; speaker guard is preserved",
+    "Visible speaker test; real sample playback; labelled pause, resume, restart, stop, completion and replay",
+    "Route picker shows current selection, search result count and clear-search recovery",
+    "Records has a return action; settings explain disabled speaker guard; downloads precede grouped audio; Help expands and links to recovery",
+    "Both preferences persist; audio survives navigation; mini-player is operable",
+    "All main screens checked for horizontal text/document clipping at 320, 390, 430 and 768 pixels"
+  ],
+  "pageErrors": []
+}

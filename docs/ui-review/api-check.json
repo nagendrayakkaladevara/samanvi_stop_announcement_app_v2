@@ -1,0 +1,14 @@
+{
+  "date": "2026-09-27",
+  "scope": "Mock service browser flows; no live backend",
+  "checks": [
+    "API-shaped fixtures: bootstrap, choose route, manifest, download, ordered stops",
+    "Failed route persistence keeps the route picker open with an error; retry succeeds",
+    "Missing download recovers in place without a navigation loop or changing the selected route",
+    "Refresh failure brings its error into view and preserves playable previously downloaded audio",
+    "Available route update is clearly identified while saved audio remains usable",
+    "Zero-stop route has an explicit empty state rather than a false ready status",
+    "Empty published catalog has a clear recovery path"
+  ],
+  "pageErrors": []
+}

@@ -1,0 +1,1 @@
+{"platforms":["apple","android"],"apple":{"modules":["SamanviAudioRouteModule"]},"android":{"modules":["expo.modules.samanviaudioroute.SamanviAudioRouteModule"]}}

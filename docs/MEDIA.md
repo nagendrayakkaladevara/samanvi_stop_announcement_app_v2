@@ -1,4 +1,4 @@
-# Demo audio sources
+# Browser-test audio sources
 
 Four audio assets were reused from the existing [SamanviBusRouteVoiceApp_Expo](https://github.com/nagendrayakkaladevara/SamanviBusRouteVoiceApp_Expo) project. The new application code and structure are separate.
 
@@ -9,6 +9,6 @@ Four audio assets were reused from the existing [SamanviBusRouteVoiceApp_Expo](h
 | `assets/audio/vijayawada.mp3`    | `assets/audio/ST-VH02/1vijayawada.mp3`     |  58380 |
 | `assets/audio/visakhapatnam.mp3` | `assets/audio/ST-VH02/34Visakhapatnam.mp3` |  56712 |
 
-These are sample announcements, not a complete current service route. The demo route intentionally contains only the two bundled stops. Production routes, versions, common announcements, and media come from the configured backend.
+These files are retained only as media fixtures for the browser audit. The application does not import or bundle them. Production routes, announcements and streaming URLs come exclusively from the configured backend.
 
 The lowercase s mark in `assets/app-icon.svg` is a simple new pilot app icon. The SVG and rendered PNG are included so it can be replaced with approved final artwork.

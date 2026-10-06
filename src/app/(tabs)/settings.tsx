@@ -11,7 +11,8 @@ import {
 } from "../../ui/components";
 import { useLibrary } from "../../state/library";
 import { colors as c } from "../../ui/theme";
-import { isDemo } from "../../services/api";
+import { useAuth } from "../../state/auth";
+import { confirmAction } from "../../ui/components";
 
 function Row({
   icon,
@@ -43,6 +44,7 @@ function Row({
 }
 export default function Settings() {
   const { preferences, setPreference } = useLibrary();
+  const auth = useAuth();
   return (
     <Screen title="Settings" kicker="Preferences & support">
       <Card
@@ -66,9 +68,9 @@ export default function Settings() {
           <Label style={{ color: c.red, fontWeight: "700" }}>ST</Label>
         </View>
         <View style={{ gap: 5, flex: 1 }}>
-          <Label style={{ fontWeight: "600" }}>Samanvi driver</Label>
+          <Label style={{ fontWeight: "600" }}>{auth.session?.user.displayName ?? "Samanvi driver"}</Label>
           <Label style={{ fontSize: 13, color: c.muted }}>
-            {isDemo ? "Demo library" : "Published announcement library"}
+            Published announcement library
           </Label>
         </View>
       </Card>
@@ -81,10 +83,17 @@ export default function Settings() {
         />
         <View style={{ height: 1, marginLeft: 55, backgroundColor: c.line }} />
         <Row
-          icon="download"
+          icon="headphones"
           title="Audio library"
           onPress={() => router.push("/library")}
         />
+      </Card>
+      <Card>
+          <Row
+            icon="log-out"
+            title="Sign out"
+            onPress={() => confirmAction("Sign out?", "You will need your username and password to use the app again.", () => void auth.signOut(), "Sign out")}
+          />
       </Card>
       <SectionTitle>Preferences</SectionTitle>
       <Card style={{ padding: 18, gap: 20 }}>

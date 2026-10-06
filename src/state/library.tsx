@@ -1,289 +1,110 @@
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-  type PropsWithChildren,
-} from "react";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState, type PropsWithChildren } from "react";
+import { AppState } from "react-native";
 import * as Network from "expo-network";
-import {
-  demoAssets,
-  demoAudio,
-  demoBootstrap,
-  demoManifest,
-} from "../data/demo";
-import {
-  allAudio,
-  isReady,
-  readableError,
-  withSelectedRoute,
-  type AudioAsset,
-  type LibrarySnapshot,
-} from "../domain/catalog";
-import { fetchBootstrap, fetchManifest, isDemo } from "../services/api";
-import {
-  fileExists,
-  readSnapshot,
-  readValue,
-  saveAudio,
-  saveSnapshot,
-  writeValue,
-} from "../services/storage";
+import { readableError, type Bootstrap, type RouteSummary } from "../domain/catalog";
+import { fetchBootstrap, updatePinnedRoute } from "../services/api";
+import { defaultPreferences, readPreferences, savePreferences, type Preferences } from "../services/preferences";
 
-type Preferences = {
-  keepAwake: boolean;
-  requireSpeaker: boolean;
-  entered: boolean;
-};
-const defaults: Preferences = {
-  keepAwake: true,
-  requireSpeaker: true,
-  entered: false,
-};
 type LibraryContextValue = {
-  snapshot: LibrarySnapshot | null;
+  catalog: Bootstrap | null;
   loading: boolean;
   busy: string | null;
   error: string | null;
   online: boolean;
   preferences: Preferences;
   refresh: () => Promise<void>;
-  downloadRoute: (id: string) => Promise<void>;
-  selectRoute: (id: string) => Promise<boolean>;
-  setPreference: <K extends keyof Preferences>(
-    key: K,
-    value: Preferences[K],
-  ) => Promise<void>;
+  togglePin: (route: RouteSummary) => Promise<void>;
+  pinBusy: boolean;
+  setPreference: <K extends keyof Preferences>(key: K, value: Preferences[K]) => Promise<void>;
   clearError: () => void;
 };
 const LibraryContext = createContext<LibraryContextValue | null>(null);
 
 export function LibraryProvider({ children }: PropsWithChildren) {
-  const [snapshot, setSnapshot] = useState<LibrarySnapshot | null>(null);
-  const current = useRef<LibrarySnapshot | null>(null);
+  const [catalog, setCatalog] = useState<Bootstrap | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [preferences, setPreferences] = useState(defaults);
-  const preferencesRef = useRef(defaults);
+  const [pinBusy, setPinBusy] = useState(false);
+  const [preferences, setPreferences] = useState(defaultPreferences);
+  const preferencesRef = useRef(defaultPreferences);
   const preferenceQueue = useRef<Promise<void>>(Promise.resolve());
-  const locked = useRef(false);
+  const request = useRef(0);
+  const pinLocked = useRef(false);
   const network = Network.useNetworkState();
-  const online =
-    network.isInternetReachable !== false && network.isConnected !== false;
-
-  const commit = useCallback(async (next: LibrarySnapshot) => {
-    await saveSnapshot(next);
-    current.current = next;
-    setSnapshot(next);
-  }, []);
-
-  const ensureAudio = useCallback(
-    async (
-      audios: AudioAsset[],
-      files: LibrarySnapshot["files"],
-      demo = false,
-    ) => {
-      const result = { ...files };
-      // Sequential downloads bound memory when optional SHA-256 validation reads a file.
-      for (let index = 0; index < audios.length; index++) {
-        const audio = audios[index];
-        if (isReady({ files: result }, audio) && fileExists(result[audio.id]))
-          continue;
-        setBusy(`Saving audio ${index + 1} of ${audios.length}`);
-        result[audio.id] = await saveAudio(
-          audio,
-          demo ? demoAssets[audio.id] : undefined,
-        );
-      }
-      return result;
-    },
-    [],
-  );
+  const online = network.isInternetReachable !== false && network.isConnected !== false;
 
   const refresh = useCallback(async () => {
-    if (locked.current) return;
-    locked.current = true;
-    setBusy("Refreshing library");
+    const version = ++request.current;
+    setBusy("Loading announcements");
     setError(null);
     try {
-      if (isDemo) {
-        const files = await ensureAudio(
-          demoAudio,
-          current.current?.files ?? {},
-          true,
-        );
-        await commit({
-          schemaVersion: 1,
-          source: "demo",
-          bootstrap: demoBootstrap,
-          manifests: { [demoManifest.id]: demoManifest },
-          files,
-          selectedRouteId: current.current?.selectedRouteId ?? demoManifest.id,
-          lastSyncedAt: new Date().toISOString(),
-        });
-      } else {
-        const bootstrap = await fetchBootstrap();
-        const common = [
-          ...bootstrap.commonAudios,
-          ...(bootstrap.welcomeAudio ? [bootstrap.welcomeAudio] : []),
-        ];
-        const files = await ensureAudio(common, current.current?.files ?? {});
-        const published = new Set(bootstrap.routes.map((route) => route.id));
-        const manifests = Object.fromEntries(
-          Object.entries(current.current?.manifests ?? {}).filter(([id]) =>
-            published.has(id),
-          ),
-        );
-        const previousId = current.current?.selectedRouteId;
-        await commit({
-          schemaVersion: 1,
-          source: "api",
-          bootstrap,
-          manifests,
-          files,
-          selectedRouteId:
-            previousId && published.has(previousId) ? previousId : null,
-          lastSyncedAt: new Date().toISOString(),
-        });
-      }
+      if (!online) throw new Error("Connect to the internet to load announcements.");
+      const next = await fetchBootstrap();
+      if (version === request.current) setCatalog(next);
     } catch (failure) {
-      setError(readableError(failure));
+      if (version === request.current) { setCatalog(null); setError(readableError(failure)); }
     } finally {
-      locked.current = false;
-      setBusy(null);
+      if (version === request.current) { setBusy(null); setLoading(false); }
     }
-  }, [commit, ensureAudio]);
+  }, [online]);
 
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
-      try {
-        const [saved, prefs] = await Promise.all([
-          readSnapshot(),
-          readValue<Preferences>("preferences"),
-        ]);
-        if (cancelled) return;
-        current.current = saved;
-        setSnapshot(saved);
-        if (prefs) {
-          preferencesRef.current = { ...defaults, ...prefs };
-          setPreferences(preferencesRef.current);
-        }
-        // Downloads can continue on Home with visible progress.
-        setLoading(false);
-        if (isDemo || !saved) await refresh();
-      } catch (failure) {
-        if (!cancelled) setError(readableError(failure));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    void readPreferences().then((value) => {
+      if (!cancelled) { preferencesRef.current = value; setPreferences(value); }
+    }).catch((failure) => { if (!cancelled) setError(readableError(failure)); });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.resolve().then(() => { if (!cancelled) return refresh(); });
+    const invalidate = () => { request.current++; };
+    const subscription = AppState.addEventListener("change", (state) => { if (state === "active") void refresh(); });
+    return () => { cancelled = true; invalidate(); subscription.remove(); };
   }, [refresh]);
 
-  const downloadRoute = useCallback(
-    async (id: string) => {
-      if (locked.current) return;
-      if (isDemo) {
-        await refresh();
-        return;
-      }
-      locked.current = true;
-      setBusy("Getting route announcements");
-      setError(null);
-      try {
-        const manifest = await fetchManifest(id);
-        const previous = current.current;
-        if (!previous)
-          throw new Error("Refresh your routes before downloading audio.");
-        const files = await ensureAudio(
-          manifest.audios.map((item) => item.audio),
-          previous.files,
-        );
-        await commit({
-          ...previous,
-          files,
-          manifests: { ...previous.manifests, [id]: manifest },
-          lastSyncedAt: new Date().toISOString(),
-        });
-      } catch (failure) {
-        setError(readableError(failure));
-      } finally {
-        locked.current = false;
-        setBusy(null);
-      }
-    },
-    [commit, ensureAudio, refresh],
-  );
+  const togglePin = useCallback(async (route: RouteSummary) => {
+    if (pinLocked.current) return;
+    pinLocked.current = true;
+    setPinBusy(true);
+    setError(null);
+    // Invalidate any earlier bootstrap response so it cannot overwrite this mutation.
+    request.current++;
+    setBusy(null);
+    try {
+      if (!online) throw new Error("Connect to the internet to change pinned routes.");
+      const result = await updatePinnedRoute(route.id, !route.isPinned);
+      request.current++;
+      setBusy(null);
+      setLoading(false);
+      const ids = new Set(result.routes.map((item) => item.id));
+      setCatalog((current) => current ? { ...current, routes: current.routes.map((item) => ({ ...item, isPinned: ids.has(item.id) })) } : null);
+    } catch (failure) {
+      // Reconcile server state after a limit conflict or an uncertain network response.
+      await refresh();
+      setError(readableError(failure));
+    } finally { pinLocked.current = false; setPinBusy(false); }
+  }, [online, refresh]);
 
-  const selectRoute = useCallback(
-    async (id: string) => {
-      if (!current.current || locked.current) return false;
-      locked.current = true;
-      setError(null);
-      try {
-        await commit(withSelectedRoute(current.current, id));
-        return true;
-      } catch (failure) {
-        setError(readableError(failure));
-        return false;
-      } finally {
-        locked.current = false;
-      }
-    },
-    [commit],
-  );
-  const setPreference = useCallback(
-    async <K extends keyof Preferences>(key: K, value: Preferences[K]) => {
-      // Serialize writes so quick changes to different switches cannot overwrite
-      // each other with an older preference snapshot.
-      preferenceQueue.current = preferenceQueue.current.then(async () => {
-        const next = { ...preferencesRef.current, [key]: value };
-        try {
-          await writeValue("preferences", next);
-          preferencesRef.current = next;
-          setPreferences(next);
-        } catch (failure) {
-          setError(readableError(failure));
-        }
-      });
-      await preferenceQueue.current;
-    },
-    [],
-  );
+  const setPreference = useCallback(async <K extends keyof Preferences>(key: K, value: Preferences[K]) => {
+    preferenceQueue.current = preferenceQueue.current.then(async () => {
+      const next = { ...preferencesRef.current, [key]: value };
+      try { await savePreferences(next); preferencesRef.current = next; setPreferences(next); }
+      catch (failure) { setError(readableError(failure)); }
+    });
+    await preferenceQueue.current;
+  }, []);
 
-  return (
-    <LibraryContext.Provider
-      value={{
-        snapshot,
-        loading,
-        busy,
-        error,
-        online,
-        preferences,
-        refresh,
-        downloadRoute,
-        selectRoute,
-        setPreference,
-        clearError: () => setError(null),
-      }}
-    >
-      {children}
-    </LibraryContext.Provider>
-  );
+  return <LibraryContext.Provider value={{ catalog: online ? catalog : null, loading, busy, error, online, preferences, refresh, togglePin, pinBusy, setPreference, clearError: () => setError(null) }}>{children}</LibraryContext.Provider>;
 }
-
 export function useLibrary() {
   const context = useContext(LibraryContext);
   if (!context) throw new Error("useLibrary must be inside LibraryProvider");
   return context;
 }
 export function useLibraryAudio() {
-  const { snapshot } = useLibrary();
-  return snapshot ? allAudio(snapshot) : [];
+  const { catalog } = useLibrary();
+  return catalog?.quickAnnouncements.flatMap((item) => item.type === "MULTIPLE" ? item.audios : item.audio ? [item.audio] : []) ?? [];
 }

@@ -7,10 +7,8 @@ import {
   Icon,
   Label,
   Notice,
-  StatusPill,
 } from "../ui/components";
 import { useLibrary } from "../state/library";
-import { isDemo } from "../services/api";
 import { colors as c } from "../ui/theme";
 
 export default function Welcome() {
@@ -26,17 +24,12 @@ export default function Welcome() {
           </View>
           <Label style={s.title}>Every stop,{"\n"}clearly announced.</Label>
           <Label style={s.copy}>
-            Choose a route, save its audio, and connect the bus speaker. You’re
-            ready to go.
+            Connect the bus speaker and choose a route. Stream announcements
+            throughout your journey with an internet connection.
           </Label>
         </View>
         <View style={s.footer}>
           {error ? <Notice tone="error">{error}</Notice> : null}
-          {isDemo ? (
-            <View style={{ alignItems: "center" }}>
-              <StatusPill label="Demo · Sample announcements" />
-            </View>
-          ) : null}
           {loading ? (
             <View style={{ alignItems: "center", gap: 10 }}>
               <ActivityIndicator color={c.red} />

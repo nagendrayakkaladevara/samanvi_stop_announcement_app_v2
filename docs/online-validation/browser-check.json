@@ -1,5 +1,5 @@
 {
-  "date": "2026-10-06T09:53:57.391Z",
+  "date": "2026-10-06T18:34:45.706Z",
   "checks": [
     "Authenticated startup uses a live catalog, no media downloads, and one route button with no empty cards",
     "Pin/unpin is shared across Home/Audio, limited to three, and restored from the backend after reload",

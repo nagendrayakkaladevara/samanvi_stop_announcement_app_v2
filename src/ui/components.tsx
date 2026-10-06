@@ -2,6 +2,7 @@ import React, { type ComponentProps, type PropsWithChildren } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -56,15 +57,13 @@ export function Label({ children, style, ...props }: TextProps) {
 }
 export function Brand() {
   return (
-    <View style={styles.brand}>
-      <View style={styles.brandMark}>
-        <Label style={styles.brandLetter}>s</Label>
-      </View>
-      <View>
-        <Label style={styles.brandName}>samanvi</Label>
-        <Label style={styles.brandSub}>T R A V E L S</Label>
-      </View>
-    </View>
+    <Image
+      accessibilityLabel="Samanvi Travels"
+      accessibilityRole="image"
+      resizeMode="contain"
+      source={require("../../assets/samv_logo.png")}
+      style={styles.brandLogo}
+    />
   );
 }
 export function Card({
@@ -567,28 +566,7 @@ export const styles = StyleSheet.create({
   },
   kicker: { fontSize: 13, color: c.muted },
   caption: { fontSize: 13, lineHeight: 20, color: c.muted },
-  brand: { flexDirection: "row", alignItems: "center", gap: 9 },
-  brandMark: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
-    backgroundColor: c.red,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  brandLetter: {
-    color: c.surface,
-    fontWeight: "700",
-    fontSize: 29,
-    lineHeight: 34,
-  },
-  brandName: {
-    fontSize: 19,
-    fontWeight: "700",
-    letterSpacing: -0.6,
-    lineHeight: 23,
-  },
-  brandSub: { color: c.muted, fontSize: 7, lineHeight: 13, fontWeight: "600" },
+  brandLogo: { width: 146, height: 36 },
   card: {
     borderRadius: layout.radius,
     borderWidth: 1,

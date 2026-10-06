@@ -13,6 +13,7 @@ import {
 } from "../../ui/components";
 import { RouteCard } from "../../ui/route-card";
 import { useLibrary } from "../../state/library";
+import { useAuth } from "../../state/auth";
 import { colors as c } from "../../ui/theme";
 
 const quick: { key: string; title: string; icon: IconName }[] = [
@@ -22,6 +23,7 @@ const quick: { key: string; title: string; icon: IconName }[] = [
 ];
 export default function Home() {
   const { catalog } = useLibrary();
+  const { session } = useAuth();
   const pinned = catalog?.routes.filter((route) => route.isPinned) ?? [];
   const start = useStartAnnouncement();
   const { fontScale } = useWindowDimensions();
@@ -32,7 +34,7 @@ export default function Home() {
         <OutputBadge />
       </View>
       <View style={s.heading}>
-        <Label style={s.kicker}>Hello, driver.</Label>
+        <Label style={s.kicker}>Hello, {session?.user.displayName?.trim() || "Driver"}.</Label>
         <Label accessibilityRole="header" style={s.title}>
           Have a good journey.
         </Label>

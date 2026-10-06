@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -21,6 +21,10 @@ export default function LoginScreen() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const revealPassword = () => {
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 250);
+  };
 
   async function submit() {
     if (!username.trim() || !password) return;
@@ -38,8 +42,17 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={s.screen}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={s.content}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <ScrollView
+          ref={scrollRef}
+          automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+          keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={s.content}
+        >
           <View style={s.header}>
             <Brand />
             <View style={s.routeLine}>
@@ -86,6 +99,7 @@ export default function LoginScreen() {
                   editable={!busy}
                   value={password}
                   onChangeText={setPassword}
+                  onFocus={revealPassword}
                   onSubmitEditing={() => void submit()}
                   placeholder="Enter your password"
                   placeholderTextColor={c.subtle}
@@ -119,7 +133,7 @@ export default function LoginScreen() {
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#F2EFE9" },
-  content: { flexGrow: 1, padding: 22, justifyContent: "center", gap: 24 },
+  content: { flexGrow: 1, padding: 22, paddingBottom: 38, justifyContent: "center", gap: 24 },
   header: { gap: 24 },
   routeLine: { height: 42, flexDirection: "row", alignItems: "center", paddingHorizontal: 4 },
   routeDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: c.red },

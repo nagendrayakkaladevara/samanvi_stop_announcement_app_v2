@@ -12,6 +12,7 @@
     },
     "android": {
       "package": "com.samanvitravels.driver.v2",
+      "softwareKeyboardLayoutMode": "resize",
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO"
       ],

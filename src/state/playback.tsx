@@ -14,6 +14,7 @@ import {
   useAudioPlayerStatus,
 } from "expo-audio";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
+import Constants from "expo-constants";
 import AudioRoute from "../../modules/samanvi-audio-route";
 import { readableError, type AudioAsset } from "../domain/catalog";
 import {
@@ -31,6 +32,8 @@ const unknownOutput: Output = {
   name: "Check on your phone",
   supported: false,
 };
+const supportsNativeBackgroundPlayback =
+  Platform.OS !== "web" && Constants.expoGoConfig == null;
 type Phase = PlaybackPhase;
 type PlaybackContextValue = {
   active: AudioAsset | null;
@@ -72,7 +75,7 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
   }, []);
   const lockScreen = useCallback(
     (enabled: boolean, audio?: AudioAsset) => {
-      if (Platform.OS !== "web")
+      if (supportsNativeBackgroundPlayback)
         player.setActiveForLockScreen(
           enabled,
           audio ? { title: audio.title, artist: "Samanvi Travels" } : undefined,
@@ -226,7 +229,7 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
         await setAudioModeAsync({
           playsInSilentMode: true,
           allowsRecording: false,
-          shouldPlayInBackground: true,
+          shouldPlayInBackground: supportsNativeBackgroundPlayback,
           interruptionMode: "doNotMix",
         });
         if (!gate.current.isCurrent(request)) return false;

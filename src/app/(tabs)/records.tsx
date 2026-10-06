@@ -1,41 +1,28 @@
+import { useState } from "react";
 import { View } from "react-native";
-import { router } from "expo-router";
-import {
-  Button,
-  Label,
-  EmptyState,
-  Screen,
-  StatusPill,
-} from "../../ui/components";
-import { colors } from "../../ui/theme";
+import * as Linking from "expo-linking";
+import { Button, Notice, Screen } from "../../ui/components";
+import { fetchConfig } from "../../services/api";
+import { readableError } from "../../domain/catalog";
+import { useLibrary } from "../../state/library";
 
 export default function Records() {
-  return (
-    <Screen title="Records" kicker="Your announcement history">
-      <EmptyState
-        icon="clock"
-        title="History is on its way"
-        description="A record of your route announcements will be available in a future update."
-      />
-      <View style={{ alignItems: "center" }}>
-        <StatusPill label="Coming soon" />
-      </View>
-      <Label
-        style={{
-          color: colors.muted,
-          textAlign: "center",
-          fontSize: 14,
-          marginVertical: 16,
-        }}
-      >
-        No playback history is recorded in this version.
-      </Label>
-      <Button
-        title="Go to route audio"
-        variant="secondary"
-        icon="map"
-        onPress={() => router.navigate("/(tabs)/announcements")}
-      />
-    </Screen>
-  );
+  const { online } = useLibrary();
+  const [opening, setOpening] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const open = async () => {
+    setOpening(true); setError(null);
+    try {
+      const config = await fetchConfig();
+      if (!config.recordsDriveUrl) throw new Error("The records folder has not been configured. Please contact your administrator.");
+      await Linking.openURL(config.recordsDriveUrl);
+    } catch (failure) { setError(readableError(failure)); }
+    finally { setOpening(false); }
+  };
+  return <Screen title="Records">
+    <View style={{ flex: 1, justifyContent: "center", gap: 18 }}>
+      {error ? <Notice tone="error">{error}</Notice> : null}
+      <Button title={opening ? "Opening Google Drive…" : "Open Google Drive"} icon="external-link" disabled={opening || !online} onPress={() => void open()} />
+    </View>
+  </Screen>;
 }

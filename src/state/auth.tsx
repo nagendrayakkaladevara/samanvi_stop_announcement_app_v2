@@ -1,7 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState, type PropsWithChildren } from "react";
 import { AppState } from "react-native";
 import {
-  isDemo,
   loginMobileDriver,
   logoutMobileDriver,
   refreshAuthSession,
@@ -23,7 +22,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<MobileAuthSession | null>(null);
-  const [loading, setLoading] = useState(!isDemo);
+  const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
 
   const invalidate = useCallback(async (reason: string) => {
@@ -35,7 +34,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     setAuthFailureHandler((reason) => { void invalidate(reason); });
-    if (isDemo) return () => setAuthFailureHandler(null);
     let cancelled = false;
     void (async () => {
       try {
@@ -54,7 +52,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, [invalidate]);
 
   useEffect(() => {
-    if (!session || isDemo) return;
+    if (!session) return;
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") {
         void refreshAuthSession().then(setSession).catch((error) => invalidate(error instanceof Error ? error.message : "Please sign in again."));
@@ -70,9 +68,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const signOut = useCallback(async () => {
-    await logoutMobileDriver();
-    setSession(null);
-    setMessage("You have been signed out.");
+    try { await logoutMobileDriver(); }
+    catch { /* Local sign-out still succeeds when the service is unreachable. */ }
+    finally { setSession(null); setMessage("You have been signed out."); }
   }, []);
 
   return <AuthContext.Provider value={{ session, loading, message, signIn, signOut, clearMessage: () => setMessage(null) }}>{children}</AuthContext.Provider>;

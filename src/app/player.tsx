@@ -48,7 +48,7 @@ export default function Player() {
         <Label accessibilityRole="header" style={s.title}>
           {p.active.title}
         </Label>
-        <Label style={s.caption}>{audioFormat(p.active)} · Saved offline</Label>
+        <Label style={s.caption}>{audioFormat(p.active)} · Online streaming</Label>
         <View accessibilityLiveRegion="polite">
           <StatusPill
             label={state.label}

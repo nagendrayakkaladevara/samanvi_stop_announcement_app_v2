@@ -21,7 +21,7 @@ import { router } from "expo-router";
 import { colors as c, layout } from "./theme";
 import { useLibrary } from "../state/library";
 import { usePlayback } from "../state/playback";
-import { formatDuration, isReady, type AudioAsset } from "../domain/catalog";
+import { formatDuration, type AudioAsset } from "../domain/catalog";
 import { isExternal } from "../domain/playback-gate";
 import { audioFormat, playbackPresentation } from "../domain/presentation";
 
@@ -348,13 +348,14 @@ export function Screen({
         ) : null}
         {!library.online ? (
           <Notice>
-            You’re offline. Only audio already saved on this device can play.
+            Connect to the internet to use announcements and records.
           </Notice>
         ) : null}
         {library.error ? (
-          <Notice tone="error" onDismiss={library.clearError}>
-            {library.error}
-          </Notice>
+          <View style={{ gap: 10 }}>
+            <Notice tone="error" onDismiss={library.clearError}>{library.error}</Notice>
+            {!library.catalog ? <Button title="Retry connection" variant="secondary" disabled={!!library.busy} onPress={() => void library.refresh()} /> : null}
+          </View>
         ) : null}
         {playback.message ? (
           <Notice tone="error" onDismiss={playback.dismissMessage}>
@@ -456,34 +457,27 @@ export function AudioRow({
   subtitle,
   last = false,
   title,
-  onDownload,
-  downloadBusy = false,
 }: {
   audio: AudioAsset;
   subtitle?: string;
   last?: boolean;
   title?: string;
-  onDownload?: () => void;
-  downloadBusy?: boolean;
 }) {
-  const { snapshot } = useLibrary();
-  const ready = isReady(snapshot, audio);
+  const { online } = useLibrary();
   const start = useStartAnnouncement();
   const playback = usePlayback();
   const current =
     playback.active?.id === audio.id &&
     ["loading", "playing", "paused"].includes(playback.phase);
   const displayTitle = title ?? audio.title;
-  const disabled = !ready && downloadBusy;
+  const disabled = !online;
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={
         current
           ? `Open ${displayTitle}`
-          : ready
-            ? `Play ${displayTitle}`
-            : `Download ${displayTitle}`
+          : `Play ${displayTitle}`
       }
       accessibilityState={{ selected: current, disabled }}
       aria-current={current ? "true" : undefined}
@@ -491,11 +485,7 @@ export function AudioRow({
       onPress={() =>
         current
           ? router.push("/player")
-          : ready
-            ? start(audio)
-            : onDownload
-              ? onDownload()
-              : router.push("/library")
+          : start(audio)
       }
       style={({ pressed }) => [
         styles.audioRow,
@@ -506,20 +496,16 @@ export function AudioRow({
     >
       <View style={{ flex: 1, gap: 6 }}>
         <Label style={styles.rowTitle}>{displayTitle}</Label>
-        <Label style={[styles.caption, !ready && { color: c.amber }]}>
+        <Label style={styles.caption}>
           {current
             ? playbackPresentation(playback.phase, playback.playing).label
-            : ready
-              ? (subtitle ?? `${audioFormat(audio)} · Saved offline`)
-              : downloadBusy
-                ? "Saving audio…"
-                : "Tap to download"}
+            : (subtitle ?? `${audioFormat(audio)} · Tap to play`)}
         </Label>
       </View>
       <View
         style={[
           styles.playChip,
-          { backgroundColor: ready ? c.redSoft : c.background },
+          { backgroundColor: c.redSoft },
         ]}
       >
         <Icon
@@ -528,11 +514,9 @@ export function AudioRow({
               ? playback.playing
                 ? "volume-2"
                 : "pause"
-              : ready
-                ? "play"
-                : "download"
+              : "play"
           }
-          color={ready ? c.red : c.muted}
+          color={c.red}
           size={20}
         />
       </View>
@@ -574,7 +558,7 @@ export function MiniPlayer() {
 export const styles = StyleSheet.create({
   text: { color: c.text, fontSize: 15, lineHeight: 22 },
   screen: { flex: 1, backgroundColor: c.background },
-  scroll: { padding: layout.gutter, gap: layout.gap },
+  scroll: { flexGrow: 1, padding: layout.gutter, gap: layout.gap },
   title: {
     fontSize: 28,
     fontWeight: "700",

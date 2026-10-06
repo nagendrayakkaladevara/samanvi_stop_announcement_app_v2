@@ -1,5 +1,7 @@
 # Samanvi Driver v2 — UI and UX review
 
+> Historical review of the September 2026 prototype. Its saved-library/demo flows have been replaced by the online-only architecture in [BACKEND.md](BACKEND.md). Current checks and browser audit instructions are in [VERIFICATION.md](VERIFICATION.md); the old screenshots below are retained as historical evidence.
+
 Review date: 27 September 2026.
 
 All ten screens in the fresh v2 app were reviewed, and the changes below were applied to the source. The focus was preparing route audio, finding the right announcement, understanding playback/output status, and recovering from missing downloads or service errors.

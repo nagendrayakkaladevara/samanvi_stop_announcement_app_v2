@@ -1,32 +1,28 @@
 import { Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
 import { router } from "expo-router";
 import {
-  AudioRow,
   Brand,
   Button,
-  Card,
   Icon,
   Label,
   OutputBadge,
   Screen,
   SectionTitle,
-  StatusPill,
   useStartAnnouncement,
   type IconName,
 } from "../../ui/components";
 import { RouteCard } from "../../ui/route-card";
 import { useLibrary } from "../../state/library";
 import { colors as c } from "../../ui/theme";
-import { isDemo } from "../../services/api";
-import { isReady } from "../../domain/catalog";
 
 const quick: { key: string; title: string; icon: IconName }[] = [
-  { key: "lunch", title: "Lunch break", icon: "coffee" },
-  { key: "dinner", title: "Dinner break", icon: "moon" },
-  { key: "toilet|washroom", title: "Toilet break", icon: "users" },
+  { key: "welcome-note", title: "Welcome Note", icon: "volume-2" },
+  { key: "dinner-break", title: "Dinner Break", icon: "moon" },
+  { key: "toilet-break", title: "Toilet Break", icon: "users" },
 ];
 export default function Home() {
-  const { snapshot } = useLibrary();
+  const { catalog } = useLibrary();
+  const pinned = catalog?.routes.filter((route) => route.isPinned) ?? [];
   const start = useStartAnnouncement();
   const { fontScale } = useWindowDimensions();
   return (
@@ -44,35 +40,31 @@ export default function Home() {
           Keep your passengers informed at every stop.
         </Label>
       </View>
-      {isDemo ? <StatusPill label="Demo library" /> : null}
-      <SectionTitle action="Library" onPress={() => router.push("/library")}>
+      <SectionTitle>
         Quick announcements
       </SectionTitle>
       <View style={[s.grid, fontScale > 1.3 && { flexDirection: "column" }]}>
         {quick.map((item) => {
-          const audio = snapshot?.bootstrap.commonAudios.find((value) =>
-            new RegExp(item.key, "i").test(value.title),
-          );
-          const ready = audio ? isReady(snapshot, audio) : false;
+          const announcement = catalog?.quickAnnouncements.find((value) => value.id === item.key);
+          const available = announcement?.type === "MULTIPLE" ? announcement.audios.length > 0 : !!announcement?.audio;
           return (
             <Pressable
               key={item.key}
               accessibilityRole="button"
               accessibilityLabel={
-                audio
-                  ? `${ready ? "Play" : "Download"} ${item.title}`
+                available
+                  ? `${announcement?.type === "MULTIPLE" ? "Choose" : "Play"} ${item.title}`
                   : `${item.title}, not yet published`
               }
-              accessibilityState={{ disabled: !audio }}
-              disabled={!audio}
+              accessibilityState={{ disabled: !available }}
+              disabled={!available}
               onPress={() => {
-                if (!audio) return;
-                if (ready) start(audio);
-                else router.push("/library");
+                if (announcement?.type === "MULTIPLE") router.push("/welcome-notes");
+                else if (announcement?.audio) start(announcement.audio);
               }}
               style={({ pressed }) => [
                 s.quick,
-                !audio && {
+                !available && {
                   backgroundColor: c.background,
                   borderStyle: "dashed",
                 },
@@ -81,33 +73,22 @@ export default function Home() {
             >
               <Icon
                 name={item.icon}
-                color={audio ? c.red : c.subtle}
+                color={available ? c.red : c.subtle}
                 size={24}
               />
               <Label style={s.quickLabel}>{item.title}</Label>
-              {!audio ? (
+              {!available ? (
                 <Label style={s.unavailable}>Unavailable</Label>
-              ) : !ready ? (
-                <Label style={s.unavailable}>Download</Label>
               ) : null}
             </Pressable>
           );
         })}
       </View>
       <View style={{ height: 4 }} />
-      <RouteCard />
-      <Button
-        title="View route announcements"
-        onPress={() => router.push("/(tabs)/announcements")}
-      />
-      {snapshot?.bootstrap.welcomeAudio ? (
-        <>
-          <SectionTitle>Welcome aboard</SectionTitle>
-          <Card>
-            <AudioRow audio={snapshot.bootstrap.welcomeAudio} last />
-          </Card>
-        </>
-      ) : null}
+      <SectionTitle action={pinned.length ? "View all" : undefined} onPress={() => router.navigate("/(tabs)/announcements")}>Pinned Routes</SectionTitle>
+      {pinned.length ? pinned.map((route) => <RouteCard key={route.id} route={route} />) : (
+        <Button title="View Route Announcements" onPress={() => router.navigate("/(tabs)/announcements")} />
+      )}
       <Label style={s.safety}>Use controls only when safely parked.</Label>
     </Screen>
   );

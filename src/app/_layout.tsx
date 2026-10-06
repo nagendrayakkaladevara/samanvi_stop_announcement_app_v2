@@ -5,14 +5,13 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "../state/auth";
 import { LibraryProvider } from "../state/library";
 import { PlaybackProvider } from "../state/playback";
-import { isDemo } from "../services/api";
 import { colors } from "../ui/theme";
 
 export { ErrorBoundary } from "expo-router";
 
 function Navigator() {
   const { session, loading } = useAuth();
-  const authenticated = isDemo || Boolean(session);
+  const authenticated = Boolean(session);
   if (loading) return <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background }}><ActivityIndicator color={colors.red} /></View>;
 
   const stack = (
@@ -21,7 +20,8 @@ function Navigator() {
       <Stack.Protected guard={authenticated}>
         <Stack.Screen name="index" />
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="routes" />
+        <Stack.Screen name="route-announcements" />
+        <Stack.Screen name="welcome-notes" />
         <Stack.Screen name="library" />
         <Stack.Screen name="speaker" />
         <Stack.Screen name="help" />
@@ -29,7 +29,7 @@ function Navigator() {
       </Stack.Protected>
     </Stack>
   );
-  return authenticated ? <LibraryProvider><PlaybackProvider>{stack}</PlaybackProvider></LibraryProvider> : stack;
+  return authenticated ? <LibraryProvider key={session!.user.id}><PlaybackProvider>{stack}</PlaybackProvider></LibraryProvider> : stack;
 }
 
 export default function RootLayout() {

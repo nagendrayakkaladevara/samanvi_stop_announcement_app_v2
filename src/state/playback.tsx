@@ -15,14 +15,14 @@ import {
 } from "expo-audio";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import AudioRoute from "../../modules/samanvi-audio-route";
-import { isReady, readableError, type AudioAsset } from "../domain/catalog";
+import { readableError, type AudioAsset } from "../domain/catalog";
 import {
   isExternal,
   outputWasLost,
   PlaybackGate,
   type Output,
 } from "../domain/playback-gate";
-import { fileExists } from "../services/storage";
+import { fetchAudio } from "../services/api";
 import type { PlaybackPhase } from "../domain/presentation";
 import { useLibrary } from "./library";
 
@@ -51,9 +51,11 @@ type PlaybackContextValue = {
 const PlaybackContext = createContext<PlaybackContextValue | null>(null);
 
 export function PlaybackProvider({ children }: PropsWithChildren) {
-  const player = useAudioPlayer(null, { updateInterval: 250 });
+  const player = useAudioPlayer(null, { updateInterval: 250, downloadFirst: false });
   const status = useAudioPlayerStatus(player);
-  const { snapshot, preferences } = useLibrary();
+  const { online, preferences } = useLibrary();
+  const onlineRef = useRef(online);
+  useEffect(() => { onlineRef.current = online; }, [online]);
   const [active, setActive] = useState<AudioAsset | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
   const [message, setMessage] = useState<string | null>(null);
@@ -135,20 +137,53 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
     const subscription = player.addListener("playbackStatusUpdate", (next) => {
       if (!activeRef.current) return;
       if (next.error) {
+        player.pause();
         transition("error");
         setMessage(
-          "This audio could not be played. Open your library and check its download.",
+          "This audio could not be streamed. Check your connection and retry.",
         );
         lockScreen(false);
       } else if (next.didJustFinish) {
         transition("finished");
         lockScreen(false);
-      } else if (next.playing) transition("playing");
+      } else if (next.playing) {
+        if (!onlineRef.current || ["stopped", "interrupted", "error"].includes(phaseRef.current)) {
+          player.pause();
+          return;
+        }
+        transition("playing");
+      }
       else if (phaseRef.current === "playing" && !next.isBuffering)
         transition("paused");
     });
     return () => subscription.remove();
   }, [player, lockScreen, transition]);
+
+  useEffect(() => {
+    if (online) return;
+    gate.current.cancel();
+    player.pause();
+    player.replace(null);
+    lockScreen(false);
+    if (activeRef.current) {
+      transition("interrupted");
+      setMessage("Internet connection lost. Reconnect, then replay the announcement.");
+    }
+  }, [online, player, lockScreen, transition]);
+
+  useEffect(() => () => { gate.current.cancel(); }, []);
+
+  useEffect(() => {
+    if (phase !== "loading") return;
+    const timeout = setTimeout(() => {
+      gate.current.cancel();
+      player.pause();
+      lockScreen(false);
+      transition("error");
+      setMessage("Audio took too long to load. Check your connection and retry.");
+    }, 30_000);
+    return () => clearTimeout(timeout);
+  }, [phase, player, lockScreen, transition]);
 
   useEffect(() => {
     if (!preferences.keepAwake || !status.playing || Platform.OS === "web")
@@ -170,11 +205,7 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
       const request = gate.current.next();
       setMessage(null);
       try {
-        const file = snapshot?.files[audio.id];
-        if (!file || !isReady(snapshot, audio) || !fileExists(file))
-          throw new Error(
-            "This announcement is not saved on this phone. Open Audio library and download it before playing.",
-          );
+        if (!onlineRef.current) throw new Error("Connect to the internet to play announcements.");
         const selectedOutput = await refreshOutput();
         if (!gate.current.isCurrent(request)) return false;
         if (
@@ -182,9 +213,16 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
           !allowPhone &&
           !isExternal(selectedOutput)
         )
-          throw new Error(
-            "Connect your bus speaker first. You can play a phone test from the speaker screen.",
-          );
+           throw new Error(
+             "Connect your bus speaker first. You can play a phone test from the speaker screen.",
+           );
+        player.pause();
+        lockScreen(false);
+        activeRef.current = audio;
+        setActive(audio);
+        transition("loading");
+        const latest = await fetchAudio(audio.id);
+        if (!gate.current.isCurrent(request) || !onlineRef.current) return false;
         await setAudioModeAsync({
           playsInSilentMode: true,
           allowsRecording: false,
@@ -193,9 +231,7 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
         });
         if (!gate.current.isCurrent(request)) return false;
         player.pause();
-        player.replace({ uri: file.uri });
-        activeRef.current = audio;
-        setActive(audio);
+        player.replace({ uri: latest.audioUrl });
         allowPhoneRef.current = allowPhone;
         transition("loading");
         lockScreen(true, audio);
@@ -203,13 +239,17 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
         return true;
       } catch (failure) {
         if (gate.current.isCurrent(request)) {
+          if (phaseRef.current === "loading") {
+            player.pause();
+            lockScreen(false);
+            transition("error");
+          }
           setMessage(readableError(failure));
         }
         return false;
       }
     },
     [
-      snapshot,
       preferences.requireSpeaker,
       refreshOutput,
       player,
@@ -243,6 +283,7 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
       return;
     }
     const request = gate.current.next();
+    if (!onlineRef.current) { setMessage("Connect to the internet before resuming."); return; }
     const next = await refreshOutput();
     if (!gate.current.isCurrent(request)) return;
     if (
@@ -254,10 +295,12 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
       return;
     }
     try {
+      await fetchAudio(activeRef.current.id);
+      if (!gate.current.isCurrent(request) || !onlineRef.current) return;
       lockScreen(true, activeRef.current);
       player.play();
     } catch (failure) {
-      setMessage(readableError(failure));
+      if (gate.current.isCurrent(request)) setMessage(readableError(failure));
     }
   }, [refreshOutput, preferences.requireSpeaker, replay, player, lockScreen]);
 

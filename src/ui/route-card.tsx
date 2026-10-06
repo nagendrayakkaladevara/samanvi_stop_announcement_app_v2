@@ -1,100 +1,52 @@
-import { View, StyleSheet } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
+import { Card, Icon, Label, StatusPill } from "./components";
 import { useLibrary } from "../state/library";
-import { Button, Card, Icon, Label, styles as shared } from "./components";
+import type { RouteSummary } from "../domain/catalog";
 import { colors as c } from "./theme";
-import { routeDownloadState } from "../domain/presentation";
 
-export function RouteCard() {
-  const { snapshot } = useLibrary();
-  const route = snapshot?.bootstrap.routes.find(
-    (item) => item.id === snapshot.selectedRouteId,
-  );
-  if (!route)
-    return (
-      <Card style={{ padding: 22, gap: 16 }}>
-        <Label style={{ fontSize: 18, fontWeight: "600" }}>
-          Choose today’s route
-        </Label>
-        <Label style={{ color: c.muted }}>
-          Your stops and saved announcements will be ready when you are.
-        </Label>
-        <Button title="Choose a route" onPress={() => router.push("/routes")} />
-      </Card>
-    );
-  const { ready, total, saved, needsUpdate } = routeDownloadState(
-    snapshot,
-    route.id,
-  );
+export function RouteCard({ route }: { route: RouteSummary }) {
+  const { catalog, togglePin, pinBusy, online } = useLibrary();
+  const limitReached = (catalog?.routes.filter((item) => item.isPinned).length ?? 0) >= 3;
+  const disabled = !online || pinBusy || (!route.isPinned && limitReached);
   return (
-    <Card style={s.card}>
-      <View style={s.top}>
-        <Label style={s.eyebrow}>CURRENT ROUTE</Label>
-        <Button
-          title="Change"
-          variant="quiet"
-          onPress={() => router.push("/routes")}
-        />
-      </View>
-      <View style={s.cities}>
-        <View style={s.cityRow}>
-          <View style={s.dot} />
-          <Label style={s.city}>{route.origin}</Label>
+    <Card>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${route.routeId}, ${route.startLocation} to ${route.endLocation}, ${route.via ? `via ${route.via}, ` : ""}${route.busType}. Open announcements`}
+        onPress={() => router.push({ pathname: "/route-announcements", params: { id: route.id } })}
+        style={({ pressed }) => [s.body, { opacity: pressed ? 0.65 : 1 }]}
+      >
+        <View style={s.row}>
+          <Label style={s.code}>{route.routeId}</Label>
+          <StatusPill label={route.busType} />
         </View>
-        <View style={s.connector} />
-        <View style={s.cityRow}>
-          <View style={[s.dot, s.destinationDot]} />
-          <Label style={s.city}>{route.destination}</Label>
+        <Label style={s.journey}>{route.startLocation} → {route.endLocation}</Label>
+        <View style={s.row}>
+          <Label style={s.via}>{route.via ? `Via ${route.via}` : "Direct route"}</Label>
+          <Icon name="chevron-right" size={20} color={c.red} />
         </View>
-      </View>
-      <View style={{ flexDirection: "row", gap: 7, alignItems: "center" }}>
-        <Icon
-          name={ready ? "check-circle" : "download"}
-          size={14}
-          color={ready ? c.green : c.muted}
-        />
-        <Label style={[shared.caption, { flex: 1 }]}>
-          {total === 0
-            ? "No stops published yet"
-            : `${total} stops · ${ready ? "Saved offline" : `${saved} saved`}`}
-        </Label>
-      </View>
-      {needsUpdate ? (
-        <Label style={{ color: c.amber, fontSize: 13, marginTop: 8 }}>
-          A route update is available in your audio library.
-        </Label>
-      ) : null}
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${route.isPinned ? "Unpin" : "Pin"} ${route.routeId}`}
+        accessibilityHint={!route.isPinned && limitReached ? "Unpin another route first. Maximum 3 pinned routes." : undefined}
+        accessibilityState={{ disabled, selected: route.isPinned }}
+        disabled={disabled}
+        onPress={() => void togglePin(route)}
+        style={({ pressed }) => [s.pin, { opacity: disabled ? 0.5 : pressed ? 0.6 : 1 }]}
+      >
+        <Icon name={route.isPinned ? "bookmark" : "plus"} size={16} color={route.isPinned ? c.red : c.muted} />
+        <Label style={{ fontSize: 13, color: route.isPinned ? c.red : c.muted, fontWeight: "600" }}>{route.isPinned ? "Unpin route" : "Pin route"}</Label>
+      </Pressable>
     </Card>
   );
 }
 const s = StyleSheet.create({
-  card: { paddingHorizontal: 20, paddingBottom: 21 },
-  top: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  eyebrow: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: c.muted,
-    letterSpacing: 0.6,
-  },
-  cities: { gap: 12, marginTop: 4, marginBottom: 18 },
-  cityRow: { flexDirection: "row", alignItems: "center", gap: 14 },
-  city: { fontSize: 17, fontWeight: "600", flex: 1, lineHeight: 25 },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: c.red },
-  destinationDot: {
-    backgroundColor: c.surface,
-    borderWidth: 1.5,
-    borderColor: c.red,
-  },
-  connector: {
-    position: "absolute",
-    top: 22,
-    left: 3.5,
-    height: 18,
-    borderLeftWidth: 1,
-    borderColor: c.line,
-  },
+  body: { padding: 18, gap: 13 },
+  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  code: { fontSize: 13, fontWeight: "700", color: c.red, letterSpacing: 1 },
+  journey: { fontSize: 19, lineHeight: 28, fontWeight: "600" },
+  via: { fontSize: 13, color: c.muted, flex: 1 },
+  pin: { flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "center", minHeight: 48, borderTopWidth: 1, borderColor: c.line },
 });

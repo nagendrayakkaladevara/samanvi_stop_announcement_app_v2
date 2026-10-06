@@ -20,14 +20,14 @@ const topics = [
   },
   {
     title: "Missing an announcement?",
-    copy: "Open the audio library and download your selected route. If an announcement is still missing, ask your administrator to publish it.",
+    copy: "Open Audio and refresh your routes. If an announcement is still missing, ask your administrator to publish it.",
     action: "Open audio library",
     path: "/library",
   },
   {
-    title: "Can I use the app offline?",
-    copy: "Yes. Save your route audio before travelling. Downloaded announcements stay available in the installed mobile app without internet.",
-    action: "Prepare audio library",
+    title: "What connection do I need?",
+    copy: "Keep mobile data or Wi-Fi connected. Announcements stream from the service and require an internet connection.",
+    action: "Open audio library",
     path: "/library",
   },
   {
@@ -67,7 +67,7 @@ export default function Help() {
                 index === 0
                   ? "volume-2"
                   : index === 1
-                    ? "download"
+                     ? "headphones"
                     : index === 2
                       ? "wifi-off"
                       : "pause-circle"

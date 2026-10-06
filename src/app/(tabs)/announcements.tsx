@@ -1,104 +1,32 @@
-import { router } from "expo-router";
-import {
-  AudioRow,
-  Button,
-  Card,
-  EmptyState,
-  Notice,
-  Screen,
-  SectionTitle,
-} from "../../ui/components";
+import { useCallback, useState } from "react";
+import { TextInput, View } from "react-native";
+import { useFocusEffect } from "expo-router";
+import { Button, Card, EmptyState, Icon, Label, Screen } from "../../ui/components";
 import { RouteCard } from "../../ui/route-card";
 import { useLibrary } from "../../state/library";
-import { routeDownloadState } from "../../domain/presentation";
+import { colors as c } from "../../ui/theme";
 
 export default function Announcements() {
-  const { snapshot, downloadRoute, busy } = useLibrary();
-  const id = snapshot?.selectedRouteId;
-  const manifest = id ? snapshot?.manifests[id] : undefined;
-  const state = id ? routeDownloadState(snapshot, id) : null;
+  const { catalog, refresh, busy, loading } = useLibrary();
+  const [search, setSearch] = useState("");
+  useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
+  const routes = catalog?.routes.filter((route) =>
+    `${route.routeId} ${route.startLocation} ${route.endLocation} ${route.via} ${route.busType}`.toLowerCase().includes(search.trim().toLowerCase()),
+  ) ?? [];
+  const pins = catalog?.routes.filter((route) => route.isPinned).length ?? 0;
   return (
-    <Screen title="Route audio" kicker="Announcements for your journey">
-      <RouteCard />
-      {state?.needsUpdate ? (
-        <>
-          <Notice>
-            Your saved audio is still available. Download the latest route
-            before your next journey.
-          </Notice>
-          <Button
-            title="Update route audio"
-            disabled={!!busy}
-            onPress={() => {
-              if (id) void downloadRoute(id);
-            }}
-            icon="download"
-          />
-        </>
-      ) : null}
-      {manifest?.audios.length ? (
-        <>
-          <SectionTitle
-            action="Library"
-            onPress={() => router.push("/library")}
-          >
-            Route stops
-          </SectionTitle>
-          <Card>
-            {[...manifest.audios]
-              .sort((a, b) => a.position - b.position)
-              .map((item, index, items) => (
-                <AudioRow
-                  key={`${item.position}-${item.audio.id}`}
-                  audio={item.audio}
-                  title={item.stopLabel || undefined}
-                  subtitle={`${index + 1}. ${index === 0 ? "Departure" : index === items.length - 1 ? "Final stop" : "Arrival"} · Saved offline`}
-                  last={index === items.length - 1}
-                  downloadBusy={!!busy}
-                  onDownload={() => {
-                    if (id) void downloadRoute(id);
-                  }}
-                />
-              ))}
-          </Card>
-        </>
-      ) : manifest ? (
-        <>
-          <EmptyState
-            icon="map-pin"
-            title="No stops published yet"
-            description="Your administrator can add stop announcements to this route. Check again when they’re ready."
-          />
-          <Button
-            title="Check route audio"
-            variant="secondary"
-            disabled={!!busy}
-            onPress={() => {
-              if (id) void downloadRoute(id);
-            }}
-          />
-        </>
-      ) : id ? (
-        <>
-          <EmptyState
-            icon="download-cloud"
-            title="Save your route audio"
-            description="Download the announcements once, then play them without an internet connection."
-          />
-          <Button
-            title="Download route audio"
-            icon="download"
-            disabled={!!busy}
-            onPress={() => void downloadRoute(id)}
-          />
-        </>
-      ) : (
-        <EmptyState
-          icon="map"
-          title="Your journey starts here"
-          description="Choose a published route above to see its stops and announcements."
-        />
-      )}
+    <Screen title="Audio" kicker="Route announcements">
+      <Card style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, gap: 10 }}>
+        <Icon name="search" size={20} color={c.muted} />
+        <TextInput accessibilityLabel="Search routes" placeholder="Search route or location" placeholderTextColor={c.subtle} value={search} onChangeText={setSearch} autoCorrect={false} style={{ flex: 1, minWidth: 0, minHeight: 54, color: c.text, fontSize: 15 }} />
+      </Card>
+      <View style={{ gap: 4 }}>
+        <Label style={{ color: c.muted, fontSize: 13 }}>{pins} of 3 routes pinned</Label>
+        {pins === 3 ? <Label style={{ color: c.amber, fontSize: 13 }}>Unpin a route to pin another.</Label> : null}
+      </View>
+      {routes.map((route) => <RouteCard key={route.id} route={route} />)}
+      {!routes.length && !loading && !busy && catalog ? <EmptyState icon="map" title={search ? "No matching routes" : "No routes available"} description={search ? "Try a different route ID or location." : "Your administrator can publish routes here."} /> : null}
+      <Button title="Refresh routes" icon="refresh-cw" variant="secondary" disabled={!!busy} onPress={() => void refresh()} />
     </Screen>
   );
 }

@@ -11,7 +11,6 @@ import {
 } from "../../ui/components";
 import { useLibrary } from "../../state/library";
 import { colors as c } from "../../ui/theme";
-import { isDemo } from "../../services/api";
 import { useAuth } from "../../state/auth";
 import { confirmAction } from "../../ui/components";
 
@@ -71,7 +70,7 @@ export default function Settings() {
         <View style={{ gap: 5, flex: 1 }}>
           <Label style={{ fontWeight: "600" }}>{auth.session?.user.displayName ?? "Samanvi driver"}</Label>
           <Label style={{ fontSize: 13, color: c.muted }}>
-            {isDemo ? "Demo library" : "Published announcement library"}
+            Published announcement library
           </Label>
         </View>
       </Card>
@@ -84,20 +83,18 @@ export default function Settings() {
         />
         <View style={{ height: 1, marginLeft: 55, backgroundColor: c.line }} />
         <Row
-          icon="download"
+          icon="headphones"
           title="Audio library"
           onPress={() => router.push("/library")}
         />
       </Card>
-      {!isDemo ? (
-        <Card>
+      <Card>
           <Row
             icon="log-out"
             title="Sign out"
             onPress={() => confirmAction("Sign out?", "You will need your username and password to use the app again.", () => void auth.signOut(), "Sign out")}
           />
-        </Card>
-      ) : null}
+      </Card>
       <SectionTitle>Preferences</SectionTitle>
       <Card style={{ padding: 18, gap: 20 }}>
         {(

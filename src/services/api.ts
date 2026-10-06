@@ -2,7 +2,7 @@ import { Platform } from "react-native";
 import * as Application from "expo-application";
 import * as Device from "expo-device";
 import { z } from "zod";
-import { bootstrapSchema, manifestSchema } from "../domain/catalog";
+import { audioSchema, bootstrapSchema, configSchema, pinnedRoutesSchema, routeAnnouncementsSchema } from "../domain/catalog";
 import {
   getInstallationId,
   loadAuthSession,
@@ -11,7 +11,6 @@ import {
 } from "./auth-storage";
 
 const configuredUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim().replace(/\/+$/, "") ?? "";
-export const isDemo = configuredUrl.length === 0;
 export const apiBaseUrl = configuredUrl;
 
 const userSchema = z.object({
@@ -61,7 +60,7 @@ async function rawRequest(path: string, init: RequestInit): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20_000);
   try {
-    return await fetch(`${configuredUrl}${path}`, { ...init, signal: controller.signal });
+    return await fetch(`${configuredUrl}${path}`, { ...init, cache: "no-store", signal: controller.signal });
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") throw new Error("The connection timed out. Try again when your signal improves.");
     if (error instanceof TypeError) throw new Error("Cannot reach the announcement service. Check your internet connection.");
@@ -110,11 +109,15 @@ async function authenticatedRequest(path: string, init: RequestInit = {}, retry 
       return authenticatedRequest(path, init, false);
     } catch (error) {
       const failure = error instanceof Error ? error.message : "Your session is no longer valid.";
-      authFailureHandler?.(failure);
+      if (error instanceof MobileApiError && (error.status === 401 || error.status === 403)) authFailureHandler?.(failure);
       throw error;
     }
   }
-  if (!response.ok) throw await parseError(response);
+  if (!response.ok) {
+    const error = await parseError(response);
+    if (response.status === 401) authFailureHandler?.(error.message);
+    throw error;
+  }
   return response;
 }
 
@@ -155,9 +158,15 @@ export async function logoutMobileDriver(): Promise<void> {
 async function get<T>(path: string, schema: z.ZodType<T>): Promise<T> {
   const response = await authenticatedRequest(`/mobile/announcements${path}`);
   const envelope = z.object({ success: z.literal(true), data: schema }).safeParse(await response.json());
-  if (!envelope.success) throw new Error("The announcement service returned an unsupported response. Your saved library has been kept.");
+  if (!envelope.success) throw new Error("The announcement service returned an unsupported response. Please try again or contact your administrator.");
   return envelope.data.data;
 }
 
 export const fetchBootstrap = () => get("/bootstrap", bootstrapSchema);
-export const fetchManifest = (id: string) => get(`/routes/${encodeURIComponent(id)}/manifest`, manifestSchema);
+export const fetchRouteAnnouncements = (id: string) => get(`/routes/${encodeURIComponent(id)}/announcements`, routeAnnouncementsSchema);
+export const fetchAudio = (id: string) => get(`/audios/${encodeURIComponent(id)}`, audioSchema);
+export const fetchConfig = () => get("/config", configSchema);
+export async function updatePinnedRoute(id: string, pinned: boolean) {
+  const response = await authenticatedRequest(`/mobile/users/me/pinned-routes/${encodeURIComponent(id)}`, { method: pinned ? "POST" : "DELETE" });
+  return z.object({ success: z.literal(true), data: pinnedRoutesSchema }).parse(await response.json()).data;
+}

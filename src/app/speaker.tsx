@@ -15,16 +15,14 @@ import {
   useStartAnnouncement,
 } from "../ui/components";
 import { usePlayback } from "../state/playback";
-import { useLibrary, useLibraryAudio } from "../state/library";
-import { isReady } from "../domain/catalog";
+import { useLibraryAudio } from "../state/library";
 import { isExternal } from "../domain/playback-gate";
 import { colors as c } from "../ui/theme";
 
 export default function Speaker() {
   const { output, refreshOutput } = usePlayback();
-  const { snapshot } = useLibrary();
   const audio = useLibraryAudio();
-  const testAudio = audio.find((item) => isReady(snapshot, item));
+  const testAudio = audio[0];
   const start = useStartAnnouncement();
   const connected = isExternal(output);
   const web = Platform.OS === "web";
@@ -140,10 +138,10 @@ export default function Speaker() {
         </>
       ) : (
         <>
-          <Notice>Save an announcement before running a sound test.</Notice>
+          <Notice>Load an announcement before running a sound test.</Notice>
           <Button
             title="Open audio library"
-            icon="download"
+            icon="headphones"
             onPress={() => router.push("/library")}
           />
         </>

@@ -1,32 +1,15 @@
-import { isReady, type AudioAsset, type LibrarySnapshot } from "./catalog";
-
-export function routeDownloadState(
-  snapshot: LibrarySnapshot | null,
-  id: string,
-) {
-  const route = snapshot?.bootstrap.routes.find((item) => item.id === id);
-  const manifest = snapshot?.manifests[id];
-  const total = manifest?.audios.length ?? route?._count.audios ?? 0;
-  const saved =
-    manifest?.audios.filter((item) => isReady(snapshot, item.audio)).length ??
-    0;
-  return {
-    total,
-    saved,
-    ready: !!manifest && total > 0 && saved === total,
-    needsUpdate: !!route && !!manifest && route.version !== manifest.version,
-  };
-}
+import { type AudioAsset } from "./catalog";
 
 export function audioFormat(audio: Pick<AudioAsset, "mimeType">): string {
-  return {
+  const formats: Record<string, string> = {
     "audio/mpeg": "MP3",
     "audio/mp4": "M4A",
     "audio/aac": "AAC",
     "audio/wav": "WAV",
     "audio/x-wav": "WAV",
     "audio/ogg": "OGG",
-  }[audio.mimeType];
+  };
+  return formats[audio.mimeType ?? ""] ?? "Audio";
 }
 
 export type PlaybackPhase =

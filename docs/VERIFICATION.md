@@ -1,25 +1,54 @@
 # Verification record
 
-UI review and updated implementation checks completed on 27 September 2026. Initial dependency/autolinking checks were completed on 26 September 2026.
+The online-only route-announcement implementation was validated on 6 October 2026.
 
-| Check                  | Result                          | Scope                                                                                                                                           |
-| ---------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run typecheck`    | Passed                          | TypeScript source, native-module interface, tests                                                                                               |
-| `npm run lint`         | Passed                          | Screens, UI, state, services, module interface, tests                                                                                           |
-| `npm test`             | 16 passed                       | API and download validation, cache revisions, route selection/readiness, playback races/output changes/status, MIME labels, duration formatting |
-| Expo web export        | Passed                          | Browser JavaScript bundle and required assets                                                                                                   |
-| Expo Android export    | Passed                          | Android JavaScript/Hermes bundle and required assets; not an APK build                                                                          |
-| Expo dependency check  | Passed with offline-mode caveat | Compared installed versions with the SDK's bundled compatibility data; no full online Expo Doctor result                                        |
-| Module autolinking     | Found on Android and Apple      | Confirms module discovery, not Kotlin/Swift compilation                                                                                         |
-| Demo browser checks    | Passed; zero page errors        | All ten screens; playback, navigation, settings, empty states, and responsive checks described below                                            |
-| Service-fixture checks | Passed; zero page errors        | Downloads, persistence errors, 503 recovery, route updates, no stops, and no routes; no live backend                                            |
+## Automated results
 
-The demo browser checks exercised scrollable onboarding; the disabled unavailable announcement; the default speaker guard; explicit device-test playback with an actual sample MP3; pause/resume/restart/stop/completion/replay; route search, selection and recovery; route stops; settings; Records; grouped library counts and refresh; Help sections and actions; persisted preferences; playback across navigation; and mini-player controls. Route-current and Help-expanded accessibility attributes were checked in the browser.
+| Check | Result | Scope |
+| --- | --- | --- |
+| Mobile TypeScript | Passed | `npm run typecheck` |
+| Mobile ESLint | Passed | `npm run lint` over `src`, native module interfaces and tests |
+| Mobile domain tests | 12 passed | Online bootstrap, URL validation, explicit sequence, quick announcements, pin limits, Records URL, playback races/output loss, labels and recovery states |
+| Expo web export | Passed | SDK 57 browser bundle with fixture API URL and no bundled announcement audio |
+| Expo Android export | Passed | Android Hermes bundle and assets; this is not an APK or native compilation |
+| Online browser audit | Passed; zero page errors | Auth, pins, route playback, quick announcements, Records, failure/retry behavior and responsive layout |
+| Backend build/typecheck | Passed | Matching mobile/admin API implementation |
+| Backend tests | 25 passed | Four test files, including mobile API and concurrent pin behavior |
+| Isolated migrations | Passed | All 17 migrations applied to a clean PGlite PostgreSQL instance; pin and bus-type constraints checked |
+| Admin changed-file ESLint | Passed | Modified Audio App service, types and page |
+| Admin audio tests | 5 passed | Existing audio-upload tests |
+| Admin production build | Passed | TypeScript, Vite and PWA service-worker generation |
 
-Nine entered-app screens were checked for horizontal document/text clipping at widths of 320, 390, 430, and 768 pixels, with a viewport height of 844. Welcome was checked at 390 × 844 and 320 × 640. The preview remains constrained to a phone layout on wide screens. Current screenshots are in `screenshots/`; narrow and alternate states are in `ui-review/states/`; the original screenshots are in `ui-review/before/`.
+The full admin repository lint still reports pre-existing errors in unrelated source and generated `dev-dist` files. The files changed for this feature pass targeted linting.
 
-The service-fixture checks intercepted the configured test host and supplied API-shaped bootstrap/manifests and real audio files. They verified that a failed selection save stays on the picker; missing audio downloads in place without changing the current route; refresh failure brings its error into view while previously downloaded audio stays playable; updates are labelled; and zero-stop/empty catalogs have meaningful recovery states.
+## Browser audit
 
-The preview is rendered by React Native Web in headless Chromium. These checks verify state, layout, navigation, and file loading, not audible bus output or native rendering. Current reports are `ui-review/browser-check.json` and `ui-review/api-check.json`. The optional runner and setup are documented in [UI-UX-REVIEW.md](UI-UX-REVIEW.md).
+The fixture-backed React Native Web audit verified:
 
-There was no physical phone, Android SDK build environment, Xcode environment, linked EAS project, or configured live backend available for native acceptance testing. No native compilation, APK/IPA, live-service test, store upload, or deployment is claimed. Follow `DEVICE-TESTS.md` after the first EAS build.
+- authenticated live startup with no media download or persisted catalog;
+- empty and three-pin Home states, the three-route limit, cross-tab synchronization and restoration after reload;
+- route metadata and explicit backend sequence values, including gaps;
+- audio resolution immediately before streaming and the active playback row;
+- multiple Welcome Notes and direct Dinner/Toilet playback;
+- the configured Google Drive request and the missing-configuration state;
+- stream interruption on network loss, stale-catalog removal on a 503 response and retry recovery;
+- no horizontal document overflow at 320, 390, 430 and 768 pixels; and
+- no browser page errors.
+
+The machine-readable report and screenshots are in `docs/online-validation/`.
+
+To reproduce after exporting with the fixture API URL:
+
+```powershell
+$env:EXPO_PUBLIC_API_BASE_URL='https://announcements.example.test/api/v1'
+npx expo export --platform web --output-dir dist-ui-api --max-workers 2
+$env:SAMANVI_PLAYWRIGHT_ROOT='C:\Users\HP\AppData\Local\Temp\opencode\validation'
+$env:SAMANVI_BROWSER_EXECUTABLE='C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'
+node scripts/verify-ui.cjs
+```
+
+Playwright is intentionally installed in the temporary validation directory rather than as an application dependency. The audit intercepts the fixture API and Drive navigation; it does not contact production.
+
+## Remaining acceptance work
+
+No physical-device, native APK/IPA compilation, actual Bluetooth/bus speaker, OS interruption, Drive-app handoff or live production backend test is claimed. Complete `docs/DEVICE-TESTS.md` using the deployed backend and a development/preview native build. Backend, admin and mobile must be released together because the mobile bootstrap contract changed.

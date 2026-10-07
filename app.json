@@ -42,7 +42,10 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#F5F5F7"
+          "backgroundColor": "#F5F5F7",
+          "image": "./assets/app-icon.png",
+          "imageWidth": 160,
+          "resizeMode": "contain"
         }
       ],
       "expo-secure-store",

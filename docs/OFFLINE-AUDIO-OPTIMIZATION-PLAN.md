@@ -93,17 +93,20 @@ Playing a verified downloaded announcement within the approved offline-access wi
 - Never expose partial or failed downloads as playable.
 - Recover safely from process termination between file promotion and index updates; reconcile orphan files and missing indexed files at startup.
 - Support persisted pause/resume state, cancellation, bounded retries with backoff/jitter, and recovery after restart.
-- Start with low download concurrency (one or two tasks), prioritize driver-selected audio, and deduplicate concurrent requests for the same file.
+- Start with low download concurrency (one or two tasks), prioritize newly pinned route audio, and deduplicate concurrent requests for the same file.
 - Check available storage before downloads. Never evict an active source or a route explicitly protected for a trip.
 - Track route references so removing one route does not delete an audio still needed by another.
 
-Suggested starting policy:
+Selected download scope (2026-10-09):
 
-- Prepare common announcements automatically, subject to the driver's download/network preference.
-- Add a **Download for trip** action for each route.
-- Offer automatic preparation of pinned routes, with explicit Wi-Fi-only/mobile-data controls.
+- Automatically prepare **only the authenticated driver's pinned routes**. The existing maximum of three pins bounds storage and initial traffic.
+- Unpinned route audio and quick/common announcements remain online-only in the first implementation. They are not prefetched merely because they appear in bootstrap or a route screen.
+- Pinning a route fetches its current manifest and queues its missing/changed audio. Show `Preparing`, progress, `Ready offline`, or `Needs attention`; a successful pin does not imply offline readiness until every required file is verified.
+- Unpinning immediately removes that route's offline-protection reference and prevents future sync/downloads for it. Files used by another pinned route remain protected; otherwise they become eligible for cleanup rather than requiring blocking deletion during the pin request.
+- On sign-in/startup and each successful refresh, reconcile the server-confirmed pin set before scheduling downloads. Do not let stale local pin data authorize content after a successful sync.
+- Provide explicit Wi-Fi-only/mobile-data controls and a retry action. A newly pinned route should remain visibly not ready when downloads are deferred or fail.
 - Use a configurable storage budget; evict only unprotected least-recently-used content.
-- Do not download every published route to every device.
+- Do not add a separate **Download for trip** action in the first implementation; pinning is the driver's selection mechanism for frequent routes.
 
 The app uses Expo SDK 57. Its versioned FileSystem documentation provides persistent files and download tasks with pause/resume support. Use SDK-compatible `expo-file-system`; SQLite is a suitable option for the durable catalog/download index. Install native packages using `npx expo install` and ship a compatible native build.
 
@@ -125,11 +128,11 @@ Verified local file available and offline access permitted?
 - Use source-specific loading/recovery behavior instead of treating every failure as an internet error.
 - For short announcements, prefer a complete download before playback. If streaming fallback remains, label it online-only and avoid simultaneous independent stream/download transfers for the same audio.
 
-An announcement that was never downloaded cannot be guaranteed to play with poor or absent signal. Pre-trip preparation is part of the solution.
+An announcement that was never downloaded cannot be guaranteed to play with poor or absent signal. Drivers must pin routes and wait for `Ready offline` before departure. Quick/common announcements and unpinned routes remain dependent on connectivity in the first implementation.
 
 ### 3. Durable catalog and controlled refresh
 
-Persist route summaries, quick announcements, selected/downloaded route playlists, configuration, revisions, and the last successful sync time.
+Persist route summaries, quick announcements, pinned/downloaded route playlists, configuration, revisions, and the last successful sync time.
 
 - Restore saved data immediately on startup.
 - Preserve it on network/temporary server failures and show its last-updated state.
@@ -209,7 +212,7 @@ After reliable local playback is established:
 | --- | --- | --- |
 | 1. Contract and access policy | Implement the selected 30-day-or-next-successful-sync policy; expose route/content revisions, sizes/checksums; define removal semantics | Backend/mobile agree on identity, expiry, and sync behavior |
 | 2. Offline playback MVP | Durable catalog/index; persistent download manager; local-first playback; network-safe auth | Downloaded route plays after an offline cold restart without playback network requests |
-| 3. Trip preparation UX | Download-for-trip; ready/total count; progress, retry, Wi-Fi controls, storage management | Driver can confirm route readiness before departure |
+| 3. Pinned-route preparation UX | Pin-triggered preparation; ready/total count; progress, retry, Wi-Fi controls, storage management | Driver can confirm every pinned route is ready before departure |
 | 4. Efficient sync | Freshness windows, request deduplication, conditional/batched updates, tombstones | Unchanged content is not downloaded again; returning to a screen does not force requests |
 | 5. Delivery optimization | CDN review, audio-format optimization, production metrics | Measured improvements in downloaded bytes, storage reads, and costs |
 
@@ -255,6 +258,9 @@ Update `README.md`, `docs/BACKEND.md`, and device/verification instructions when
 - [ ] A successful refresh before expiry applies removals/restrictions immediately and renews authorization for unchanged permitted content without re-downloading it.
 - [ ] Failed/partial refreshes neither erase permitted known-good downloads nor reset the 30-day window.
 - [ ] Shared files survive removal of one route while another protected route references them.
+- [ ] Only server-confirmed pinned routes are automatically downloaded; opening an unpinned route or loading quick announcements does not prefetch its media.
+- [ ] Pinning queues the current route manifest/files and reports readiness accurately; unpinning cancels pending route-only work and makes unshared files eligible for cleanup.
+- [ ] A route is never labeled `Ready offline` until all current required files are present and verified.
 - [ ] Low storage is handled without deleting active/protected trip audio.
 - [ ] Bluetooth disconnect/replacement, phone-call interruptions, repeated-play warnings, lock-screen/background playback, and Android source-replacement constraints still work.
 - [ ] Foreground/focus/reconnect events obey freshness/deduplication rules without refresh storms.
@@ -279,7 +285,7 @@ Illustrative example: a driver plays the same 20 announcements ten times.
 - Current: 200 playback-validation API requests, plus resume validation; media may be fetched repeatedly depending on native/CDN caching.
 - Proposed: 20 unique file downloads initially, occasional sync, and zero playback-validation requests for those local files.
 
-This is not a guaranteed bill-reduction percentage. Production traffic, current caching, hosting plans, R2/CDN pricing, and initial prefetch volume determine actual savings. Downloading unused content can increase traffic, so focus preparation on common audio and routes drivers actually need.
+This is not a guaranteed bill-reduction percentage. Production traffic, current caching, hosting plans, R2/CDN pricing, and initial prefetch volume determine actual savings. Limiting preparation to the driver's maximum three pinned routes avoids downloading the full catalog; shared audio is stored once per device.
 
 ## References and review validation
 

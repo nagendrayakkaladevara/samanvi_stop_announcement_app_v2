@@ -185,7 +185,8 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
     if (online) return;
     gate.current.cancel();
     player.pause();
-    player.replace(null);
+    // SDK 57 Android rejects replace(null); pausing plus request cancellation
+    // safely stops the stream until a valid source is supplied on replay.
     lockScreen(false);
     if (activeRef.current) {
       transition("interrupted");

@@ -45,3 +45,7 @@ Set the API URL in the corresponding EAS environment before building. Native pro
 | Native audio-output observation | `modules/samanvi-audio-route/` |
 
 See [VERIFICATION.md](docs/VERIFICATION.md) for checks, [DEVICE-TESTS.md](docs/DEVICE-TESTS.md) for native scenarios, and [MEDIA.md](docs/MEDIA.md) for browser-test audio attribution.
+
+## Proposed improvements
+
+See [Offline audio and API cost optimization plan](docs/OFFLINE-AUDIO-OPTIMIZATION-PLAN.md) for the proposed download-first architecture, implementation phases, offline-access policy decision, and acceptance criteria. This is a future implementation plan; the app remains online-only.

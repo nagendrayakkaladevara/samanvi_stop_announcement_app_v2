@@ -76,6 +76,9 @@ async function run() {
   const visible = (text) => page.getByText(text, { exact: true }).and(page.locator(":visible")).first().waitFor({ state: "visible", timeout: 15000 });
   try {
     await page.goto(base);
+    await page.getByRole("textbox", { name: "Username", exact: true }).waitFor();
+    await page.waitForTimeout(350);
+    await page.screenshot({ path: path.join(evidence, "login.png") });
     await page.getByRole("textbox", { name: "Username", exact: true }).fill("driver");
     await page.getByLabel("Password", { exact: true }).fill("fixture-password");
     await button("Sign in").click();

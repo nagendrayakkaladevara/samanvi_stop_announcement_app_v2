@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { audioSchema, bootstrapSchema, configSchema, formatDuration, pinnedRoutesSchema, quickAnnouncementSchema, routeAnnouncementsSchema } from "../src/domain/catalog";
 import { isExternal, outputWasLost, PlaybackGate, type Output } from "../src/domain/playback-gate";
 import { audioFormat, playbackPresentation } from "../src/domain/presentation";
+import { initialRepeatPlaybackState, recordPlayback, shouldWarnBeforePlayback } from "../src/domain/repeat-playback";
 
 const audio = { id: "a1", title: "Starting point", audioUrl: "https://media.example.com/start.mp3", mimeType: "audio/mpeg" };
 const route = { id: "r1", routeId: "ST-A02", startLocation: "Hyderabad", endLocation: "Amalapuram", via: "Vijayawada", busType: "AC", isPinned: true };
@@ -37,6 +38,18 @@ test("records only opens a configured secure Google Drive URL", () => {
   assert.equal(configSchema.safeParse({ recordsDriveUrl: null }).success, true);
   for (const recordsDriveUrl of ["http://drive.google.com/123", "https://drive.google.com.evil.test/123", "https://evil.test/123", "javascript:alert(1)"])
     assert.equal(configSchema.safeParse({ recordsDriveUrl }).success, false);
+});
+test("warns before the fourth consecutive play of the same audio", () => {
+  let state = initialRepeatPlaybackState;
+  for (let count = 1; count <= 3; count++) {
+    assert.equal(shouldWarnBeforePlayback(state, "a1"), false);
+    state = recordPlayback(state, "a1");
+    assert.equal(state.count, count);
+  }
+  assert.equal(shouldWarnBeforePlayback(state, "a1"), true);
+  state = recordPlayback(state, "a2");
+  assert.deepEqual(state, { audioId: "a2", count: 1 });
+  assert.equal(shouldWarnBeforePlayback(state, "a1"), false);
 });
 test("new play, stop, and connection loss invalidate pending audio requests", () => {
   const gate = new PlaybackGate();

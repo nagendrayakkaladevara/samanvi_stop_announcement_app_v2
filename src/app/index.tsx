@@ -1,4 +1,4 @@
-import { ActivityIndicator, ScrollView, StyleSheet, View } from "react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
 import { Redirect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -6,6 +6,7 @@ import {
   Button,
   Icon,
   Label,
+  LoadingState,
   Notice,
 } from "../ui/components";
 import { useLibrary } from "../state/library";
@@ -31,10 +32,7 @@ export default function Welcome() {
         <View style={s.footer}>
           {error ? <Notice tone="error">{error}</Notice> : null}
           {loading ? (
-            <View style={{ alignItems: "center", gap: 10 }}>
-              <ActivityIndicator color={c.red} />
-              <Label style={s.copy}>{busy ?? "Opening your library"}…</Label>
-            </View>
+            <LoadingState label={busy ?? "Opening your library"} compact />
           ) : (
             <Button
               title="Get started"

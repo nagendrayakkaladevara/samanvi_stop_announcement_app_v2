@@ -2,9 +2,12 @@ import React, { type ComponentProps, type PropsWithChildren } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Easing,
   Image,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -64,6 +67,67 @@ export function Brand() {
       source={require("../../assets/samv_logo.png")}
       style={styles.brandLogo}
     />
+  );
+}
+export function FadeIn({
+  children,
+  delay = 0,
+  style,
+}: PropsWithChildren<{ delay?: number; style?: ViewStyle }>) {
+  const [progress] = React.useState(() => new Animated.Value(0));
+  React.useEffect(() => {
+    const animation = Animated.timing(progress, {
+      toValue: 1,
+      duration: 280,
+      delay,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [delay, progress]);
+  return (
+    <Animated.View
+      style={[
+        style,
+        {
+          opacity: progress,
+          transform: [
+            {
+              translateY: progress.interpolate({
+                inputRange: [0, 1],
+                outputRange: [8, 0],
+              }),
+            },
+          ],
+        },
+      ]}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+export function LoadingState({
+  label = "Loading",
+  compact = false,
+}: {
+  label?: string;
+  compact?: boolean;
+}) {
+  return (
+    <FadeIn>
+      <View
+        accessibilityLabel={label}
+        accessibilityLiveRegion="polite"
+        accessibilityRole="progressbar"
+        style={[styles.loadingState, compact && styles.loadingCompact]}
+      >
+        <View style={styles.loadingSpinner}>
+          <ActivityIndicator size={compact ? "small" : "large"} color={c.red} />
+        </View>
+        <Label style={[styles.caption, { textAlign: "center" }]}>{label}…</Label>
+      </View>
+    </FadeIn>
   );
 }
 export function Card({
@@ -293,7 +357,15 @@ export function Screen({
   title,
   kicker,
   back = false,
-}: PropsWithChildren<{ title?: string; kicker?: string; back?: boolean }>) {
+  onRefresh,
+  refreshing,
+}: PropsWithChildren<{
+  title?: string;
+  kicker?: string;
+  back?: boolean;
+  onRefresh?: () => void;
+  refreshing?: boolean;
+}>) {
   const library = useLibrary();
   const playback = usePlayback();
   const insets = useSafeAreaInsets();
@@ -326,6 +398,15 @@ export function Screen({
         ref={scrollRef}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing ?? Boolean(library.busy)}
+            onRefresh={onRefresh ?? (() => void library.refresh())}
+            colors={[c.red]}
+            tintColor={c.red}
+            progressBackgroundColor={c.surface}
+          />
+        }
         contentContainerStyle={[
           styles.scroll,
           {
@@ -337,37 +418,36 @@ export function Screen({
           },
         ]}
       >
-        {!back && title ? (
-          <View style={{ gap: 7, marginBottom: 12 }}>
-            {kicker ? <Label style={styles.kicker}>{kicker}</Label> : null}
-            <Label accessibilityRole="header" style={styles.title}>
-              {title}
-            </Label>
-          </View>
-        ) : null}
-        {!library.online ? (
-          <Notice>
-            Connect to the internet to use announcements and records.
-          </Notice>
-        ) : null}
-        {library.error ? (
-          <View style={{ gap: 10 }}>
-            <Notice tone="error" onDismiss={library.clearError}>{library.error}</Notice>
-            {!library.catalog ? <Button title="Retry connection" variant="secondary" disabled={!!library.busy} onPress={() => void library.refresh()} /> : null}
-          </View>
-        ) : null}
-        {playback.message ? (
-          <Notice tone="error" onDismiss={playback.dismissMessage}>
-            {playback.message}
-          </Notice>
-        ) : null}
-        {library.busy ? (
-          <View accessibilityLiveRegion="polite" style={styles.progress}>
-            <ActivityIndicator size="small" color={c.red} />
-            <Label style={styles.caption}>{library.busy}…</Label>
-          </View>
-        ) : null}
-        {children}
+        <FadeIn style={styles.screenContent}>
+          {!back && title ? (
+            <View style={{ gap: 7, marginBottom: 12 }}>
+              {kicker ? <Label style={styles.kicker}>{kicker}</Label> : null}
+              <Label accessibilityRole="header" style={styles.title}>
+                {title}
+              </Label>
+            </View>
+          ) : null}
+          {!library.online ? (
+            <Notice>
+              Connect to the internet to use announcements and records.
+            </Notice>
+          ) : null}
+          {library.error ? (
+            <View style={{ gap: 10 }}>
+              <Notice tone="error" onDismiss={library.clearError}>{library.error}</Notice>
+              {!library.catalog ? <Button title="Retry connection" variant="secondary" disabled={!!library.busy} onPress={() => void library.refresh()} /> : null}
+            </View>
+          ) : null}
+          {playback.message ? (
+            <Notice tone="error" onDismiss={playback.dismissMessage}>
+              {playback.message}
+            </Notice>
+          ) : null}
+          {library.busy ? (
+            <LoadingState label={library.busy} compact />
+          ) : null}
+          {children}
+        </FadeIn>
       </ScrollView>
     </SafeAreaView>
   );
@@ -558,6 +638,7 @@ export const styles = StyleSheet.create({
   text: { color: c.text, fontSize: 15, lineHeight: 22 },
   screen: { flex: 1, backgroundColor: c.background },
   scroll: { flexGrow: 1, padding: layout.gutter, gap: layout.gap },
+  screenContent: { gap: layout.gap },
   title: {
     fontSize: 28,
     fontWeight: "700",
@@ -620,11 +701,26 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
   },
-  progress: {
-    flexDirection: "row",
+  loadingState: {
+    minHeight: 126,
     alignItems: "center",
-    gap: 10,
-    paddingVertical: 7,
+    justifyContent: "center",
+    gap: 13,
+    paddingVertical: 20,
+  },
+  loadingCompact: {
+    minHeight: 0,
+    paddingVertical: 8,
+    flexDirection: "row",
+    justifyContent: "flex-start",
+  },
+  loadingSpinner: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: c.redSoft,
   },
   topbar: {
     minHeight: 60,

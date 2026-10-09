@@ -1,4 +1,4 @@
-import { ActivityIndicator, Platform, View } from "react-native";
+import { Platform, View } from "react-native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -6,13 +6,14 @@ import { AuthProvider, useAuth } from "../state/auth";
 import { LibraryProvider } from "../state/library";
 import { PlaybackProvider } from "../state/playback";
 import { colors } from "../ui/theme";
+import { LoadingState } from "../ui/components";
 
 export { ErrorBoundary } from "expo-router";
 
 function Navigator() {
   const { session, loading } = useAuth();
   const authenticated = Boolean(session);
-  if (loading) return <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background }}><ActivityIndicator color={colors.red} /></View>;
+  if (loading) return <View style={{ flex: 1, justifyContent: "center", backgroundColor: colors.background }}><LoadingState label="Opening Samanvi Driver" /></View>;
 
   const stack = (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>

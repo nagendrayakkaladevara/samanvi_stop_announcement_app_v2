@@ -7,7 +7,7 @@ import React, {
   useState,
   type PropsWithChildren,
 } from "react";
-import { AppState, Platform } from "react-native";
+import { Alert, AppState, Platform } from "react-native";
 import {
   setAudioModeAsync,
   useAudioPlayer,
@@ -26,6 +26,11 @@ import {
 import { fetchAudio } from "../services/api";
 import type { PlaybackPhase } from "../domain/presentation";
 import { useLibrary } from "./library";
+import {
+  initialRepeatPlaybackState,
+  recordPlayback,
+  shouldWarnBeforePlayback,
+} from "../domain/repeat-playback";
 
 const unknownOutput: Output = {
   kind: "unknown",
@@ -34,6 +39,19 @@ const unknownOutput: Output = {
 };
 const supportsNativeBackgroundPlayback =
   Platform.OS !== "web" && Constants.expoGoConfig == null;
+const repeatWarning =
+  "You should not play the same audio more than three times.\n\nఒకే ఆడియోను మూడు సార్లకు మించి ప్లే చేయకూడదు.";
+
+function confirmRepeatedPlayback() {
+  if (Platform.OS === "web")
+    return Promise.resolve(window.confirm(`Repeated announcement\n\n${repeatWarning}`));
+  return new Promise<boolean>((resolve) =>
+    Alert.alert("Repeated announcement / పునరావృత ప్రకటన", repeatWarning, [
+      { text: "Cancel / రద్దు", style: "cancel", onPress: () => resolve(false) },
+      { text: "Play anyway / అయినా ప్లే చేయండి", onPress: () => resolve(true) },
+    ], { cancelable: true, onDismiss: () => resolve(false) }),
+  );
+}
 type Phase = PlaybackPhase;
 type PlaybackContextValue = {
   active: AudioAsset | null;
@@ -68,6 +86,7 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
   const phaseRef = useRef<Phase>("idle");
   const gate = useRef(new PlaybackGate());
   const allowPhoneRef = useRef(false);
+  const repeatRef = useRef(initialRepeatPlaybackState);
 
   const transition = useCallback((next: Phase) => {
     phaseRef.current = next;
@@ -218,7 +237,12 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
         )
            throw new Error(
              "Connect your bus speaker first. You can play a phone test from the speaker screen.",
-           );
+            );
+        if (
+          shouldWarnBeforePlayback(repeatRef.current, audio.id) &&
+          !(await confirmRepeatedPlayback())
+        ) return false;
+        if (!gate.current.isCurrent(request)) return false;
         player.pause();
         lockScreen(false);
         activeRef.current = audio;
@@ -239,6 +263,7 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
         transition("loading");
         lockScreen(true, audio);
         player.play();
+        repeatRef.current = recordPlayback(repeatRef.current, audio.id);
         return true;
       } catch (failure) {
         if (gate.current.isCurrent(request)) {

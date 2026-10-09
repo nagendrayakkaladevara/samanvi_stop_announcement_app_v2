@@ -10,7 +10,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Brand, Icon, Label, Notice } from "../ui/components";
+import { Brand, FadeIn, Icon, Label, Notice } from "../ui/components";
 import { colors as c } from "../ui/theme";
 import { useAuth } from "../state/auth";
 
@@ -53,21 +53,15 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={s.content}
         >
-          <View style={s.header}>
+          <FadeIn style={s.header}>
             <Brand />
-            <View style={s.routeLine}>
-              <View style={s.routeDot} />
-              <View style={s.routeTrack} />
-              <View style={s.busMark}><Icon name="navigation" size={19} color={c.surface} /></View>
+            <View style={s.intro}>
+              <Label accessibilityRole="header" style={s.eyebrow}>DRIVER SIGN IN</Label>
+              <Label style={s.copy}>Use the account provided by your administrator. Your account can be registered to one phone only.</Label>
             </View>
-            <View style={{ gap: 10 }}>
-              <Label style={s.eyebrow}>DRIVER ACCESS</Label>
-              <Label accessibilityRole="header" style={s.title}>Your route starts here.</Label>
-              <Label style={s.copy}>Sign in with the account provided by your administrator. This account can be registered to one phone only.</Label>
-            </View>
-          </View>
+          </FadeIn>
 
-          <View style={s.card}>
+          <FadeIn delay={90} style={s.card}>
             {message ? <Notice>{message}</Notice> : null}
             {error ? <Notice tone="error">{error}</Notice> : null}
             <View style={{ gap: 8 }}>
@@ -123,8 +117,10 @@ export default function LoginScreen() {
               <Label style={s.buttonText}>{busy ? "Checking account…" : "Sign in securely"}</Label>
             </Pressable>
             <View style={s.secureNote}><Icon name="shield" size={16} color={c.green} /><Label style={s.secureText}>Your password and session are stored securely on this device.</Label></View>
-          </View>
-          <Label style={s.help}>Changed or lost your phone? Contact the administrator to reset your registered device.</Label>
+          </FadeIn>
+          <FadeIn delay={160}>
+            <Label style={s.help}>Changed or lost your phone? Contact the administrator to reset your registered device.</Label>
+          </FadeIn>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -132,17 +128,13 @@ export default function LoginScreen() {
 }
 
 const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#F2EFE9" },
-  content: { flexGrow: 1, padding: 22, paddingBottom: 38, justifyContent: "center", gap: 24 },
-  header: { gap: 24 },
-  routeLine: { height: 42, flexDirection: "row", alignItems: "center", paddingHorizontal: 4 },
-  routeDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: c.red },
-  routeTrack: { flex: 1, height: 2, backgroundColor: "#D7D0C5", marginHorizontal: 8 },
-  busMark: { width: 42, height: 42, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "#252B34", transform: [{ rotate: "45deg" }] },
+  screen: { flex: 1, backgroundColor: "#F7F5F1" },
+  content: { width: "100%", maxWidth: 480, alignSelf: "center", flexGrow: 1, padding: 22, paddingBottom: 38, justifyContent: "center", gap: 24 },
+  header: { gap: 22 },
+  intro: { gap: 9, paddingRight: 8 },
   eyebrow: { fontSize: 11, lineHeight: 16, fontWeight: "700", color: c.red, letterSpacing: 2.2 },
-  title: { fontSize: 36, lineHeight: 42, fontWeight: "700", letterSpacing: -1.2, color: "#252B34" },
   copy: { color: "#62646A", fontSize: 15, lineHeight: 24 },
-  card: { gap: 19, borderRadius: 24, padding: 20, backgroundColor: c.surface, borderWidth: 1, borderColor: "#E2DDD4", shadowColor: "#252B34", shadowOpacity: 0.08, shadowRadius: 24, shadowOffset: { width: 0, height: 10 }, elevation: 3 },
+  card: { gap: 19, borderRadius: 20, padding: 20, backgroundColor: c.surface, borderWidth: 1, borderColor: "#E4E0D8", shadowColor: "#252B34", shadowOpacity: 0.06, shadowRadius: 20, shadowOffset: { width: 0, height: 8 }, elevation: 2 },
   fieldLabel: { fontSize: 13, fontWeight: "600", color: "#353941" },
   inputShell: { minHeight: 56, borderRadius: 14, borderWidth: 1, borderColor: "#DDDDE1", backgroundColor: "#FAFAFB", paddingHorizontal: 15, flexDirection: "row", alignItems: "center", gap: 11 },
   input: { flex: 1, minHeight: 54, color: c.text, fontSize: 16, paddingVertical: 0 },

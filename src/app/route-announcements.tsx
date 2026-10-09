@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
-import { AudioRow, Button, Card, EmptyState, Label, Notice, PageHeading, Screen } from "../ui/components";
+import { AudioRow, Button, Card, EmptyState, Label, LoadingState, Notice, PageHeading, Screen } from "../ui/components";
 import { fetchRouteAnnouncements } from "../services/api";
 import { readableError, type RouteAnnouncements } from "../domain/catalog";
 import { useLibrary } from "../state/library";
@@ -26,9 +26,9 @@ export default function RouteAnnouncementsScreen() {
   }, [id, online]);
   useFocusEffect(useCallback(() => { void load(); return () => { request.current++; }; }, [load]));
   return (
-    <Screen title="Route announcements" back>
+    <Screen title="Route announcements" back refreshing={loading} onRefresh={() => void load()}>
       {error ? <Notice tone="error">{error}</Notice> : null}
-      {loading ? <Label>Loading route announcements…</Label> : null}
+      {loading ? <LoadingState label="Loading route announcements" /> : null}
       {data && online ? <>
         <PageHeading title={`${data.route.startLocation} → ${data.route.endLocation}`} description={`${data.routeId} · ${data.route.busType}${data.route.via ? ` · Via ${data.route.via}` : ""}`} />
         <Label style={{ color: c.muted, fontSize: 13 }}>Tap an announcement to play</Label>

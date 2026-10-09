@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { audioSchema, bootstrapSchema, configSchema, formatDuration, pinnedRoutesSchema, quickAnnouncementSchema, routeAnnouncementsSchema } from "../src/domain/catalog";
+import { audioSchema, bootstrapSchema, configSchema, formatDuration, pinnedRoutesSchema, quickAnnouncementSchema, quickAnnouncementsSchema, quickAnnouncementSummary, routeAnnouncementsSchema } from "../src/domain/catalog";
 import { isExternal, outputWasLost, PlaybackGate, type Output } from "../src/domain/playback-gate";
 import { audioFormat, playbackPresentation } from "../src/domain/presentation";
 import { initialRepeatPlaybackState, recordPlayback, shouldWarnBeforePlayback } from "../src/domain/repeat-playback";
@@ -28,6 +28,20 @@ test("welcome notes support multiple choices and single actions require an expli
   assert.equal(quickAnnouncementSchema.safeParse({ id: "dinner-break", name: "Dinner Break", type: "SINGLE", audioUrl: audio.audioUrl, audio }).success, true);
   assert.equal(quickAnnouncementSchema.safeParse({ id: "dinner-break", name: "Dinner Break", type: "SINGLE", audios: [audio] }).success, false);
   assert.equal(quickAnnouncementSchema.safeParse({ id: "toilet-break", name: "Toilet Break", type: "SINGLE", audioUrl: null, audio: null }).success, true);
+});
+test("break button presentation follows explicit mappings, not audio titles", () => {
+  const mapped = quickAnnouncementSchema.parse({ id: "toilet-break", name: "Toilet Break", type: "SINGLE", audioUrl: audio.audioUrl, audio: { ...audio, title: "Common announcement 7" } });
+  assert.deepEqual(quickAnnouncementSummary(mapped), { available: true, detail: "Common announcement 7" });
+  const empty = quickAnnouncementSchema.parse({ id: "dinner-break", name: "Dinner Break", type: "SINGLE", audioUrl: null, audio: null });
+  assert.deepEqual(quickAnnouncementSummary(empty), { available: false, detail: "Not configured" });
+  assert.deepEqual(quickAnnouncementSummary(undefined), { available: false, detail: "Not configured" });
+});
+test("quick announcement refresh accepts replaced mappings without changing route data", () => {
+  const refreshed = quickAnnouncementsSchema.parse({ quickAnnouncements: [{ id: "toilet-break", name: "Toilet Break", type: "SINGLE", audioUrl: audio.audioUrl, audio: { ...audio, id: "replacement" } }] });
+  const initial = bootstrapSchema.parse({ routes: [route], quickAnnouncements: [], recordsDriveUrl: null, maxPinnedRoutes: 3 });
+  const next = { ...initial, ...refreshed };
+  assert.equal(next.routes[0].id, route.id);
+  assert.equal(next.quickAnnouncements[0].type === "SINGLE" && next.quickAnnouncements[0].audio?.id, "replacement");
 });
 test("rejects an invalid pin limit or oversized server pin response", () => {
   assert.equal(pinnedRoutesSchema.safeParse({ routes: Array(4).fill(route), maxPinnedRoutes: 3 }).success, false);

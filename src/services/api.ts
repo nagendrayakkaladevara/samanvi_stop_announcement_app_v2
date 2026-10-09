@@ -2,7 +2,7 @@ import { Platform } from "react-native";
 import * as Application from "expo-application";
 import * as Device from "expo-device";
 import { z } from "zod";
-import { audioSchema, bootstrapSchema, configSchema, pinnedRoutesSchema, routeAnnouncementsSchema } from "../domain/catalog";
+import { audioSchema, bootstrapSchema, configSchema, pinnedRoutesSchema, quickAnnouncementsSchema, routeAnnouncementsSchema } from "../domain/catalog";
 import {
   getInstallationId,
   loadAuthSession,
@@ -163,6 +163,7 @@ async function get<T>(path: string, schema: z.ZodType<T>): Promise<T> {
 }
 
 export const fetchBootstrap = () => get("/bootstrap", bootstrapSchema);
+export const fetchQuickAnnouncements = () => get("/quick-announcements", quickAnnouncementsSchema);
 export const fetchRouteAnnouncements = (id: string) => get(`/routes/${encodeURIComponent(id)}/announcements`, routeAnnouncementsSchema);
 export const fetchAudio = (id: string) => get(`/audios/${encodeURIComponent(id)}`, audioSchema);
 export const fetchConfig = () => get("/config", configSchema);

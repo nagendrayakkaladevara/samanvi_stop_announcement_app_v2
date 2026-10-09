@@ -6,7 +6,7 @@ const http = require("node:http");
 const { createRequire } = require("node:module");
 const root = path.resolve(__dirname, "..");
 const dist = path.join(root, "dist-ui-api");
-const evidence = path.join(root, "docs/online-validation");
+const evidence = process.env.SAMANVI_UI_EVIDENCE_DIR || path.join(root, "docs/online-validation");
 const requireTools = process.env.SAMANVI_PLAYWRIGHT_ROOT ? createRequire(path.join(process.env.SAMANVI_PLAYWRIGHT_ROOT, "package.json")) : require;
 const { chromium } = requireTools("playwright");
 const mime = { ".html": "text/html", ".js": "text/javascript", ".ttf": "font/ttf", ".png": "image/png", ".json": "application/json" };
@@ -30,10 +30,15 @@ async function run() {
   const checks = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("dialog", (dialog) => dialog.accept());
-  const audios = ["Welcome Note 1", "Welcome Note 2", "Dinner Break", "Toilet Break", "Starting Point", "Next Stop"].map((title, i) => ({ id: `a${i}`, title, audioUrl: `https://announcements.example.test/media/a${i}.mp3`, mimeType: "audio/mpeg", durationMs: null }));
+  const audios = ["Welcome Note 1", "Welcome Note 2", "Dinner Break", "Toilet Break", "Starting Point", "Next Stop", "Updated Toilet Break"].map((title, i) => ({ id: `a${i}`, title, audioUrl: `https://announcements.example.test/media/a${i}.mp3`, mimeType: "audio/mpeg", durationMs: null }));
   const routes = [1, 2, 3, 4].map((i) => ({ id: `r${i}`, routeId: `ST-A0${i}`, startLocation: "Hyderabad", endLocation: i === 1 ? "Amalapuram" : `Destination ${i}`, via: "Vijayawada", busType: i % 2 ? "AC" : "Non-AC", isPinned: false }));
   const pins = new Set();
-  const state = { fail: false, recordsDriveUrl: "https://drive.google.com/drive/folders/records-test", mediaRequests: 0, audioRequests: 0 };
+  const state = { fail: false, recordsDriveUrl: "https://drive.google.com/drive/folders/records-test", mediaRequests: 0, audioRequests: 0, lastAudioId: null, toiletAudio: audios[3] };
+  const quickAnnouncements = () => [
+    { id: "welcome-note", name: "Welcome Note", type: "MULTIPLE", audios: audios.slice(0, 2) },
+    { id: "dinner-break", name: "Dinner Break", type: "SINGLE", audio: audios[2], audioUrl: audios[2].audioUrl },
+    { id: "toilet-break", name: "Toilet Break", type: "SINGLE", audio: state.toiletAudio, audioUrl: state.toiletAudio?.audioUrl ?? null },
+  ];
   const cards = () => routes.map((route) => ({ ...route, isPinned: pins.has(route.id) }));
   const session = { accessToken: "fixture-access", refreshToken: "fixture-refresh", refreshTokenExpiresAt: "2099-01-01T00:00:00.000Z", user: { id: "driver-1", username: "driver", displayName: "Test Driver", driverId: null } };
   await page.addInitScript(() => { localStorage.setItem("samanvi.preferences.v3", JSON.stringify({ entered: true, keepAwake: true, requireSpeaker: false })); });
@@ -51,11 +56,8 @@ async function run() {
     }
     if (url.pathname.includes("/auth/")) return reply(session);
     assert.equal(request.headers().authorization, `Bearer ${session.accessToken}`);
-    if (url.pathname.endsWith("/bootstrap")) return reply({ routes: cards(), maxPinnedRoutes: 3, recordsDriveUrl: state.recordsDriveUrl, quickAnnouncements: [
-      { id: "welcome-note", name: "Welcome Note", type: "MULTIPLE", audios: audios.slice(0, 2) },
-      { id: "dinner-break", name: "Dinner Break", type: "SINGLE", audio: audios[2], audioUrl: audios[2].audioUrl },
-      { id: "toilet-break", name: "Toilet Break", type: "SINGLE", audio: audios[3], audioUrl: audios[3].audioUrl },
-    ] });
+    if (url.pathname.endsWith("/bootstrap")) return reply({ routes: cards(), maxPinnedRoutes: 3, recordsDriveUrl: state.recordsDriveUrl, quickAnnouncements: quickAnnouncements() });
+    if (url.pathname.endsWith("/quick-announcements")) return reply({ quickAnnouncements: quickAnnouncements() });
     if (url.pathname.includes("/pinned-routes/")) {
       const id = url.pathname.split("/").pop();
       if (request.method() === "DELETE") pins.delete(id);
@@ -67,7 +69,7 @@ async function run() {
       const route = cards().find((item) => url.pathname.includes(`/${item.id}/`));
       return reply({ routeId: route.routeId, route, announcements: [{ ...audios[4], sequence: 1 }, { ...audios[5], sequence: 3 }] });
     }
-    if (url.pathname.includes("/audios/")) { state.audioRequests++; return reply(audios.find((item) => url.pathname.endsWith(`/${item.id}`))); }
+    if (url.pathname.includes("/audios/")) { state.audioRequests++; state.lastAudioId = url.pathname.split("/").pop(); return reply(audios.find((item) => item.id === state.lastAudioId)); }
     if (url.pathname.endsWith("/config")) return reply({ recordsDriveUrl: state.recordsDriveUrl });
     throw new Error(`Unexpected fixture request ${url}`);
   });
@@ -142,6 +144,25 @@ async function run() {
       await button("Go back").click();
     }
     checks.push("Welcome Note opens multiple audios; Dinner and Toilet play directly without selection screens");
+    state.toiletAudio = audios[6];
+    await button("Play Toilet Break").click();
+    await visible("Playing announcement");
+    assert.equal(state.lastAudioId, "a6", "A tap must use the latest mapping, not the previous file");
+    await button("Stop announcement").click();
+    await button("Go back").click();
+    await visible("Updated Toilet Break");
+    state.toiletAudio = null;
+    const previousAudioRequests = state.audioRequests;
+    await button("Play Toilet Break").click();
+    await button("Check Toilet Break mapping").waitFor();
+    assert.equal(state.audioRequests, previousAudioRequests, "An unmapped button must not play the stale file");
+    state.toiletAudio = audios[3];
+    await button("Check Toilet Break mapping").click();
+    await visible("Playing announcement");
+    assert.equal(state.lastAudioId, "a3", "An initially unconfigured button can pick up a new mapping without restarting");
+    await button("Stop announcement").click();
+    await button("Go back").click();
+    checks.push("Break buttons show their mapped file, resolve replacements before playback, and handle removed/new mappings without restarting");
     await tab("Records").click();
     const driveRequest = page.waitForRequest("https://drive.google.com/**");
     await button("Open Google Drive").click();

@@ -16,7 +16,7 @@ Sign in with an administrator-created mobile-driver account. The service must im
 
 ## Navigation
 
-- **Home:** existing greeting and speaker status, Welcome Note selection, direct Dinner/Toilet playback, and Pinned Routes. Without pins, a single View Route Announcements button opens Audio.
+- **Home:** existing greeting and speaker status, Welcome Note selection, direct Dinner/Toilet playback, and Pinned Routes. Quick buttons show their mapped file, refresh mappings when Home is focused, and resolve the current mapping again before playback. An unconfigured button can be tapped to check for newly mapped audio. Without pins, a single View Route Announcements button opens Audio.
 - **Audio:** all published routes with route code, start/end, Via, bus type and Pin/Unpin. Open a route to load announcements in backend sequence order. Tap any audio to stream it; the active row and player indicate playback.
 - **Records:** one centered button opens the current configured Google Drive folder.
 - **Settings:** speaker controls, audio library, sign-out, keep-awake/speaker-check preferences and support.

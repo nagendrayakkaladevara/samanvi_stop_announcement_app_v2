@@ -358,18 +358,26 @@ export function Screen({
   kicker,
   back = false,
   onRefresh,
-  refreshing,
 }: PropsWithChildren<{
   title?: string;
   kicker?: string;
   back?: boolean;
-  onRefresh?: () => void;
-  refreshing?: boolean;
+  onRefresh?: () => void | Promise<void>;
 }>) {
   const library = useLibrary();
   const playback = usePlayback();
   const insets = useSafeAreaInsets();
   const scrollRef = React.useRef<ScrollView>(null);
+  const [pullRefreshing, setPullRefreshing] = React.useState(false);
+  const refreshFromPull = async () => {
+    if (pullRefreshing) return;
+    setPullRefreshing(true);
+    try {
+      await (onRefresh ? onRefresh() : library.refresh());
+    } finally {
+      setPullRefreshing(false);
+    }
+  };
   React.useEffect(() => {
     if (library.error || playback.message) {
       scrollRef.current?.scrollTo({ y: 0, animated: true });
@@ -400,8 +408,8 @@ export function Screen({
         keyboardDismissMode="on-drag"
         refreshControl={
           <RefreshControl
-            refreshing={refreshing ?? Boolean(library.busy)}
-            onRefresh={onRefresh ?? (() => void library.refresh())}
+            refreshing={pullRefreshing}
+            onRefresh={() => void refreshFromPull()}
             colors={[c.red]}
             tintColor={c.red}
             progressBackgroundColor={c.surface}

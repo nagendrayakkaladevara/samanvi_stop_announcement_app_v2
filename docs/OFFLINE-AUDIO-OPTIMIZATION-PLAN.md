@@ -174,19 +174,22 @@ Private conditional responses can reduce metadata response bytes. **HTTP 304 sti
 - Scope persistent metadata and download access to the signed-in account. Stop playback and remove local access on logout; define whether physical files are immediately deleted or retained inaccessible for later cleanup.
 - Do not treat an expired access token as unlimited offline permission; apply the approved offline authorization policy separately.
 
-## Required business/security decision
+## Offline access policy: 30 days or next successful refresh
 
 The existing implementation checks availability before every playback. Offline playback cannot preserve immediate revocation: a disconnected device cannot learn that an administrator removed an audio, unpublished a route, or disabled an account.
 
-Recommended policy, subject to approval:
+User-selected policy (2026-10-09):
 
-- Permit local playback for a bounded period after successful online authorization (for example, a configurable 24-72 hours).
+- Permit downloaded audio playback for up to **30 days after the last successful authenticated catalog/content sync**, subject to device/account binding and explicit logout.
+- The **next successful refresh/sync applies the current server state immediately**, even before the 30 days expire: reconcile replacements, removed audio, unpublished routes, and confirmed account restrictions.
+- Unchanged, still-authorized downloaded files remain playable without re-downloading. A successful authenticated sync renews their 30-day offline authorization window; refresh does not mean deleting all downloads.
+- A timeout, connection failure, partial/failed sync, app restart, playback, or local clock change must not renew the window. Preserve permitted known-good files on temporary failures without extending their authorization.
 - Define and validate the offline entitlement, device/account binding, expiry, and clock-change behavior.
 - Apply confirmed account restrictions and content removals when reconnecting.
 - Remove revoked entries from playable playlists during successful sync; do not confuse a failed sync with removal.
-- Require reconnection when offline authorization expires.
+- After 30 days without a successful authenticated sync, block offline playback and request reconnection. Retain files so successful reauthorization does not require downloading unchanged bytes again.
 
-**Immediate remote revocation and guaranteed disconnected playback are incompatible requirements.** Approve this tradeoff before removing per-play server validation. Existing public media URLs also mean API availability checks are not a complete media-access-control mechanism; stricter content confidentiality would need a separate access-control design.
+**Immediate remote revocation and guaranteed disconnected playback are incompatible requirements.** Under this policy, a device that remains disconnected may retain access for up to 30 days. Define a server-issued offline expiry separately from access/refresh token lifetimes; short-lived online tokens must not accidentally shorten or extend this policy. Existing public media URLs also mean API availability checks are not a complete media-access-control mechanism; stricter content confidentiality would need a separate access-control design.
 
 ## Media delivery and file-size optimization
 
@@ -204,7 +207,7 @@ After reliable local playback is established:
 
 | Phase | Deliverables | Exit criteria |
 | --- | --- | --- |
-| 1. Contract and access policy | Approve offline entitlement; expose route/content revisions, sizes/checksums; define removal semantics | Backend/mobile agree on identity, expiry, and sync behavior |
+| 1. Contract and access policy | Implement the selected 30-day-or-next-successful-sync policy; expose route/content revisions, sizes/checksums; define removal semantics | Backend/mobile agree on identity, expiry, and sync behavior |
 | 2. Offline playback MVP | Durable catalog/index; persistent download manager; local-first playback; network-safe auth | Downloaded route plays after an offline cold restart without playback network requests |
 | 3. Trip preparation UX | Download-for-trip; ready/total count; progress, retry, Wi-Fi controls, storage management | Driver can confirm route readiness before departure |
 | 4. Efficient sync | Freshness windows, request deduplication, conditional/batched updates, tombstones | Unchanged content is not downloaded again; returning to a screen does not force requests |
@@ -248,6 +251,9 @@ Update `README.md`, `docs/BACKEND.md`, and device/verification instructions when
 - [ ] New media content is verified and replaces the previous usable version safely; failed updates preserve permitted known-good content.
 - [ ] Successful sync reconciles removed audio/unpublished routes; temporary failures do not erase valid saved data.
 - [ ] Offline entitlement expiry, clock changes, logout, account switching, and device-binding behavior are tested.
+- [ ] Downloaded audio works before the 30-day expiry; at expiry, playback requires a successful authenticated sync. Restarting or changing the local clock does not extend access.
+- [ ] A successful refresh before expiry applies removals/restrictions immediately and renews authorization for unchanged permitted content without re-downloading it.
+- [ ] Failed/partial refreshes neither erase permitted known-good downloads nor reset the 30-day window.
 - [ ] Shared files survive removal of one route while another protected route references them.
 - [ ] Low storage is handled without deleting active/protected trip audio.
 - [ ] Bluetooth disconnect/replacement, phone-call interruptions, repeated-play warnings, lock-screen/background playback, and Android source-replacement constraints still work.

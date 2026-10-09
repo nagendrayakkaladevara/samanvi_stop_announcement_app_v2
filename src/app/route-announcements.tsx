@@ -26,7 +26,7 @@ export default function RouteAnnouncementsScreen() {
   }, [id, online]);
   useFocusEffect(useCallback(() => { void load(); return () => { request.current++; }; }, [load]));
   return (
-    <Screen title="Route announcements" back refreshing={loading} onRefresh={() => void load()}>
+    <Screen title="Route announcements" back onRefresh={load}>
       {error ? <Notice tone="error">{error}</Notice> : null}
       {loading ? <LoadingState label="Loading route announcements" /> : null}
       {data && online ? <>

@@ -1,5 +1,15 @@
 # Verification record
 
+## Break audio mapping update — 9 October 2026
+
+- Mobile typecheck and lint passed; 15 domain tests passed.
+- Backend build/typecheck and 63 tests passed, including mapping permissions, readiness/URL checks, preserved settings, moving/removing mappings and serializable-conflict handling.
+- Frontend production build and changed-file lint passed; 20 audio tests passed, including auto-mapping after verification and retries without another storage upload.
+- Expo Android and web exports passed (JavaScript/Hermes bundles, not an APK build). The fixture-backed browser audit passed with zero page errors and covers replacing/removing a Toilet Break mapping while Home stays open, picking up a newly configured mapping on tap, and displaying the mapped file title.
+- A separate fixture-backed frontend browser check passed for mapping an existing file, Dinner/Toilet upload dropdown options, progress-bar visibility, and a failed mapping retry without a duplicate upload.
+
+Use `SAMANVI_UI_EVIDENCE_DIR` when running the browser audit to save new reports/screenshots outside the historical `docs/online-validation` evidence. These checks do not claim a native APK build, real R2 upload or physical-device/speaker verification.
+
 The online-only route-announcement implementation was validated on 6 October 2026.
 
 ## Automated results

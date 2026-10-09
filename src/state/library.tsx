@@ -1,8 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState, type PropsWithChildren } from "react";
 import { AppState } from "react-native";
 import * as Network from "expo-network";
-import { readableError, type Bootstrap, type RouteSummary } from "../domain/catalog";
-import { fetchBootstrap, updatePinnedRoute } from "../services/api";
+import { readableError, type Bootstrap, type QuickAnnouncement, type RouteSummary } from "../domain/catalog";
+import { fetchBootstrap, fetchQuickAnnouncements, updatePinnedRoute } from "../services/api";
 import { defaultPreferences, readPreferences, savePreferences, type Preferences } from "../services/preferences";
 
 type LibraryContextValue = {
@@ -13,6 +13,7 @@ type LibraryContextValue = {
   online: boolean;
   preferences: Preferences;
   refresh: () => Promise<void>;
+  refreshQuickAnnouncements: () => Promise<QuickAnnouncement[]>;
   togglePin: (route: RouteSummary) => Promise<void>;
   pinBusy: boolean;
   setPreference: <K extends keyof Preferences>(key: K, value: Preferences[K]) => Promise<void>;
@@ -30,12 +31,14 @@ export function LibraryProvider({ children }: PropsWithChildren) {
   const preferencesRef = useRef(defaultPreferences);
   const preferenceQueue = useRef<Promise<void>>(Promise.resolve());
   const request = useRef(0);
+  const quickRequest = useRef(0);
   const pinLocked = useRef(false);
   const network = Network.useNetworkState();
   const online = network.isInternetReachable !== false && network.isConnected !== false;
 
   const refresh = useCallback(async () => {
     const version = ++request.current;
+    quickRequest.current++;
     setBusy("Loading announcements");
     setError(null);
     try {
@@ -49,6 +52,16 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     }
   }, [online]);
 
+  const refreshQuickAnnouncements = useCallback(async () => {
+    if (!online) throw new Error("Connect to the internet to check announcement mappings.");
+    const version = ++quickRequest.current;
+    const { quickAnnouncements } = await fetchQuickAnnouncements();
+    if (version === quickRequest.current) {
+      setCatalog((current) => current ? { ...current, quickAnnouncements } : null);
+    }
+    return quickAnnouncements;
+  }, [online]);
+
   useEffect(() => {
     let cancelled = false;
     void readPreferences().then((value) => {
@@ -60,7 +73,7 @@ export function LibraryProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     let cancelled = false;
     void Promise.resolve().then(() => { if (!cancelled) return refresh(); });
-    const invalidate = () => { request.current++; };
+    const invalidate = () => { request.current++; quickRequest.current++; };
     const subscription = AppState.addEventListener("change", (state) => { if (state === "active") void refresh(); });
     return () => { cancelled = true; invalidate(); subscription.remove(); };
   }, [refresh]);
@@ -97,7 +110,7 @@ export function LibraryProvider({ children }: PropsWithChildren) {
     await preferenceQueue.current;
   }, []);
 
-  return <LibraryContext.Provider value={{ catalog: online ? catalog : null, loading, busy, error, online, preferences, refresh, togglePin, pinBusy, setPreference, clearError: () => setError(null) }}>{children}</LibraryContext.Provider>;
+  return <LibraryContext.Provider value={{ catalog: online ? catalog : null, loading, busy, error, online, preferences, refresh, refreshQuickAnnouncements, togglePin, pinBusy, setPreference, clearError: () => setError(null) }}>{children}</LibraryContext.Provider>;
 }
 export function useLibrary() {
   const context = useContext(LibraryContext);

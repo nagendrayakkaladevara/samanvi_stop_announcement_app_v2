@@ -1,5 +1,6 @@
-import { Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
-import { router } from "expo-router";
+import { useCallback, useRef, useState } from "react";
+import { Alert, Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
+import { router, useFocusEffect } from "expo-router";
 import {
   Brand,
   Button,
@@ -15,6 +16,7 @@ import { RouteCard } from "../../ui/route-card";
 import { useLibrary } from "../../state/library";
 import { useAuth } from "../../state/auth";
 import { colors as c } from "../../ui/theme";
+import { quickAnnouncementSummary, readableError } from "../../domain/catalog";
 
 const quick: { key: string; title: string; icon: IconName }[] = [
   { key: "welcome-note", title: "Welcome Note", icon: "volume-2" },
@@ -22,11 +24,45 @@ const quick: { key: string; title: string; icon: IconName }[] = [
   { key: "toilet-break", title: "Toilet Break", icon: "users" },
 ];
 export default function Home() {
-  const { catalog } = useLibrary();
+  const { catalog, loading, online, refreshQuickAnnouncements } = useLibrary();
   const { session } = useAuth();
   const pinned = catalog?.routes.filter((route) => route.isPinned) ?? [];
   const start = useStartAnnouncement();
   const { fontScale } = useWindowDimensions();
+  const [checking, setChecking] = useState<string | null>(null);
+  const checkingRef = useRef(false);
+  const playRequest = useRef(0);
+  useFocusEffect(useCallback(() => {
+    if (!loading && online) void refreshQuickAnnouncements().catch(() => { /* A tap retries and shows any connection error. */ });
+    return () => {
+      playRequest.current++;
+      checkingRef.current = false;
+      setChecking(null);
+    };
+  }, [loading, online, refreshQuickAnnouncements]));
+
+  async function playQuickAnnouncement(key: string, title: string) {
+    if (checkingRef.current) return;
+    checkingRef.current = true;
+    const version = ++playRequest.current;
+    setChecking(key);
+    try {
+      // Resolve the current mapping, not an audio cached before the admin changed it.
+      const announcements = await refreshQuickAnnouncements();
+      if (version !== playRequest.current) return;
+      const announcement = announcements.find((item) => item.id === key);
+      if (announcement?.type === "MULTIPLE" && announcement.audios.length) router.push("/welcome-notes");
+      else if (announcement?.type === "SINGLE" && announcement.audio) start(announcement.audio);
+      else Alert.alert(`${title} not configured`, "Ask your administrator to map audio to this button in the frontend Audio library, then try again.");
+    } catch (error) {
+      if (version === playRequest.current) Alert.alert("Could not load announcement", readableError(error));
+    } finally {
+      if (version === playRequest.current) {
+        checkingRef.current = false;
+        setChecking(null);
+      }
+    }
+  }
   return (
     <Screen>
       <View style={s.header}>
@@ -48,7 +84,7 @@ export default function Home() {
       <View style={[s.grid, fontScale > 1.3 && { flexDirection: "column" }]}>
         {quick.map((item) => {
           const announcement = catalog?.quickAnnouncements.find((value) => value.id === item.key);
-          const available = announcement?.type === "MULTIPLE" ? announcement.audios.length > 0 : !!announcement?.audio;
+          const { available, detail } = quickAnnouncementSummary(announcement);
           return (
             <Pressable
               key={item.key}
@@ -56,14 +92,12 @@ export default function Home() {
               accessibilityLabel={
                 available
                   ? `${announcement?.type === "MULTIPLE" ? "Choose" : "Play"} ${item.title}`
-                  : `${item.title}, not yet published`
+                  : `Check ${item.title} mapping`
               }
-              accessibilityState={{ disabled: !available }}
-              disabled={!available}
-              onPress={() => {
-                if (announcement?.type === "MULTIPLE") router.push("/welcome-notes");
-                else if (announcement?.audio) start(announcement.audio);
-              }}
+              accessibilityHint={available ? detail : "Checks whether an administrator has configured audio for this button"}
+              accessibilityState={{ disabled: loading || !online || !!checking, busy: checking === item.key }}
+              disabled={loading || !online || !!checking}
+              onPress={() => void playQuickAnnouncement(item.key, item.title)}
               style={({ pressed }) => [
                 s.quick,
                 !available && {
@@ -79,9 +113,7 @@ export default function Home() {
                 size={24}
               />
               <Label style={s.quickLabel}>{item.title}</Label>
-              {!available ? (
-                <Label style={s.unavailable}>Unavailable</Label>
-              ) : null}
+              <Label numberOfLines={2} style={s.unavailable}>{checking === item.key ? "Checking mapping…" : detail}</Label>
             </Pressable>
           );
         })}

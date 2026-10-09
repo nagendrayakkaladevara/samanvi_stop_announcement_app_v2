@@ -22,6 +22,16 @@ export const quickAnnouncementSchema = z.discriminatedUnion("type", [
   z.object({ id, name: z.string(), type: z.literal("MULTIPLE"), audios: z.array(audioSchema) }),
   z.object({ id, name: z.string(), type: z.literal("SINGLE"), audioUrl: httpsUrl.nullable(), audio: audioSchema.nullable() }),
 ]);
+export const quickAnnouncementsSchema = z.object({ quickAnnouncements: z.array(quickAnnouncementSchema) });
+export type QuickAnnouncement = z.infer<typeof quickAnnouncementSchema>;
+
+export function quickAnnouncementSummary(announcement: QuickAnnouncement | undefined) {
+  if (!announcement) return { available: false, detail: "Not configured" };
+  if (announcement.type === "MULTIPLE") {
+    return { available: announcement.audios.length > 0, detail: announcement.audios.length ? `${announcement.audios.length} welcome notes` : "Not configured" };
+  }
+  return { available: !!announcement.audio, detail: announcement.audio?.title ?? "Not configured" };
+}
 export const configSchema = z.object({
   recordsDriveUrl: httpsUrl.refine((value) => {
     const url = new URL(value);

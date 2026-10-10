@@ -5,12 +5,13 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "../state/auth";
 import { LibraryProvider } from "../state/library";
 import { PlaybackProvider } from "../state/playback";
-import { colors } from "../ui/theme";
+import { ThemeProvider, useColors, useTheme } from "../ui/theme";
 import { LoadingState } from "../ui/components";
 
 export { ErrorBoundary } from "expo-router";
 
 function Navigator() {
+  const colors = useColors();
   const { session, loading } = useAuth();
   const authenticated = Boolean(session);
   if (loading) return <View style={{ flex: 1, justifyContent: "center", backgroundColor: colors.background }}><LoadingState label="Opening Samanvi Driver" /></View>;
@@ -33,14 +34,18 @@ function Navigator() {
   return authenticated ? <LibraryProvider key={session!.user.id}><PlaybackProvider>{stack}</PlaybackProvider></LibraryProvider> : stack;
 }
 
-export default function RootLayout() {
+function ThemedRoot() {
+  const { colors, dark } = useTheme();
   return (
     <SafeAreaProvider>
-      <View style={{ flex: 1, backgroundColor: "#E9EAED" }}>
+      <View style={{ flex: 1, backgroundColor: colors.canvas }}>
         <View style={{ flex: 1, width: "100%", maxWidth: Platform.OS === "web" ? 480 : undefined, alignSelf: "center" }}>
-          <AuthProvider><StatusBar style="dark" /><Navigator /></AuthProvider>
+          <AuthProvider><StatusBar style={dark ? "light" : "dark"} /><Navigator /></AuthProvider>
         </View>
       </View>
     </SafeAreaProvider>
   );
+}
+export default function RootLayout() {
+  return <ThemeProvider><ThemedRoot /></ThemeProvider>;
 }

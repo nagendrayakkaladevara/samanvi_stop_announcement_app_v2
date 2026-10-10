@@ -13,9 +13,11 @@ import {
 import { usePlayback } from "../state/playback";
 import { formatDuration } from "../domain/catalog";
 import { audioFormat, playbackPresentation } from "../domain/presentation";
-import { colors as c } from "../ui/theme";
+import { useColors, useStyles, type Palette } from "../ui/theme";
 
 export default function Player() {
+  const c = useColors();
+  const s = useStyles(makeStyles);
   const p = usePlayback();
   if (!p.active)
     return (
@@ -48,7 +50,7 @@ export default function Player() {
         <Label accessibilityRole="header" style={s.title}>
           {p.active.title}
         </Label>
-        <Label style={s.caption}>{audioFormat(p.active)} · Online streaming</Label>
+        <Label style={s.caption}>{audioFormat(p.active)} · {p.local ? "Playing saved audio" : "Online streaming"}</Label>
         <View accessibilityLiveRegion="polite">
           <StatusPill
             label={state.label}
@@ -98,13 +100,13 @@ export default function Player() {
             style={({ pressed }) => [s.play, { opacity: pressed ? 0.75 : 1 }]}
           >
             {loading ? (
-              <ActivityIndicator color={c.surface} />
+              <ActivityIndicator color={c.onAccent} />
             ) : (
               <Icon
                 name={
                   p.playing ? "pause" : state.restart ? "rotate-ccw" : "play"
                 }
-                color={c.surface}
+                color={c.onAccent}
                 size={28}
               />
             )}
@@ -148,7 +150,7 @@ export default function Player() {
     </Screen>
   );
 }
-const s = StyleSheet.create({
+const makeStyles = (c: Palette) => StyleSheet.create({
   hero: { alignItems: "center", gap: 14, paddingTop: 12 },
   art: {
     width: 96,

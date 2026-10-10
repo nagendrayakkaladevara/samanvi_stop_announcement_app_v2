@@ -1,8 +1,9 @@
-// Online-only browser regression audit. See docs/VERIFICATION.md.
+// Browser regression audit; native IO requires device validation. See docs/VERIFICATION.md.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const http = require("node:http");
+const { createHash } = require("node:crypto");
 const { createRequire } = require("node:module");
 const root = path.resolve(__dirname, "..");
 const dist = path.join(root, "dist-ui-api");
@@ -30,10 +31,11 @@ async function run() {
   const checks = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("dialog", (dialog) => dialog.accept());
-  const audios = ["Welcome Note 1", "Welcome Note 2", "Dinner Break", "Toilet Break", "Starting Point", "Next Stop", "Updated Toilet Break"].map((title, i) => ({ id: `a${i}`, title, audioUrl: `https://announcements.example.test/media/a${i}.mp3`, mimeType: "audio/mpeg", durationMs: null }));
+  const audios = ["Welcome Note 1", "Welcome Note 2", "Dinner Break", "Toilet Break", "Starting Point", "Next Stop", "Updated Toilet Break"].map((title, i) => ({ id: `a${i}`, title, audioUrl: `https://announcements.example.test/media/a${i}.mp3`, mimeType: "audio/mpeg", durationMs: null,
+    contentRevision: createHash("sha256").update(`a${i}`).digest("hex"), sizeBytes: fs.statSync(path.join(root, "assets/audio/dinner.mp3")).size }));
   const routes = [1, 2, 3, 4].map((i) => ({ id: `r${i}`, routeId: `ST-A0${i}`, startLocation: "Hyderabad", endLocation: i === 1 ? "Amalapuram" : `Destination ${i}`, via: "Vijayawada", busType: i % 2 ? "AC" : "Non-AC", isPinned: false }));
   const pins = new Set();
-  const state = { fail: false, recordsDriveUrl: "https://drive.google.com/drive/folders/records-test", mediaRequests: 0, audioRequests: 0, lastAudioId: null, toiletAudio: audios[3] };
+  const state = { fail: false, incompleteSync: false, authMode: "ok", refreshRequests: 0, recordsDriveUrl: "https://drive.google.com/drive/folders/records-test", mediaRequests: 0, audioRequests: 0, syncRequests: 0, lastAudioId: null, toiletAudio: audios[3] };
   const quickAnnouncements = () => [
     { id: "welcome-note", name: "Welcome Note", type: "MULTIPLE", audios: audios.slice(0, 2) },
     { id: "dinner-break", name: "Dinner Break", type: "SINGLE", audio: audios[2], audioUrl: audios[2].audioUrl },
@@ -54,8 +56,24 @@ async function run() {
       state.mediaRequests++;
       return intercept.fulfill({ status: 200, contentType: "audio/mpeg", body: fs.readFileSync(path.join(root, "assets/audio/dinner.mp3")) });
     }
+    if (url.pathname.endsWith("/auth/refresh")) {
+      state.refreshRequests++;
+      if (state.authMode === "temporary") return reply({ message: "Session service temporarily unavailable" }, 503);
+      if (state.authMode === "revoked") return reply({ message: "This driver session was revoked" }, 401);
+      return reply({ ...session, accessTokenExpiresIn: "15m" });
+    }
     if (url.pathname.includes("/auth/")) return reply(session);
     assert.equal(request.headers().authorization, `Bearer ${session.accessToken}`);
+    if (url.pathname.endsWith("/sync")) {
+      state.syncRequests++;
+      const snapshot = { catalog: { routes: cards(), maxPinnedRoutes: 3, recordsDriveUrl: state.recordsDriveUrl, quickAnnouncements: quickAnnouncements() },
+        pinnedRoutes: cards().filter((route) => route.isPinned).map((route) => ({ routeId: route.routeId, route, announcements: [{ ...audios[4], sequence: 1 }, { ...audios[5], sequence: 3 }] })) };
+      const revision = createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");
+      const unchanged = request.postDataJSON()?.revision === revision;
+      const now = Date.now();
+      if (state.incompleteSync) return reply({ revision, unchanged: false, serverTime: new Date(now).toISOString(), offlineUntil: new Date(now + 30 * 86400000).toISOString(), ...snapshot, pinnedRoutes: [] });
+      return reply({ revision, unchanged, serverTime: new Date(now).toISOString(), offlineUntil: new Date(now + 30 * 86400000).toISOString(), ...(unchanged ? {} : snapshot) });
+    }
     if (url.pathname.endsWith("/bootstrap")) return reply({ routes: cards(), maxPinnedRoutes: 3, recordsDriveUrl: state.recordsDriveUrl, quickAnnouncements: quickAnnouncements() });
     if (url.pathname.endsWith("/quick-announcements")) return reply({ quickAnnouncements: quickAnnouncements() });
     if (url.pathname.includes("/pinned-routes/")) {
@@ -184,19 +202,75 @@ async function run() {
     state.fail = true;
     await button("Refresh routes").click();
     await visible("Service temporarily unavailable");
-    assert.equal(await page.getByRole("button", { name: /Open announcements$/ }).count(), 0);
+    assert.ok(await page.getByRole("button", { name: /Open announcements$/ }).count() > 0, "Failed sync preserves the saved catalog");
     state.fail = false;
-    await button("Retry connection").click();
+    await button("Refresh routes").click();
     await button("Unpin ST-A01").waitFor();
-    checks.push("Connection loss interrupts streaming; API failure removes stale route data and retry recovers");
+    checks.push("Connection loss interrupts online-only streams; failed sync preserves saved routes and authentication");
+    await tab("Settings").click();
+    await visible("Appearance");
+    await page.getByRole("radio", { name: "dark theme", exact: true }).click();
+    assert.equal(await page.getByRole("radio", { name: "dark theme", exact: true }).getAttribute("aria-checked"), "true");
+    await page.screenshot({ path: path.join(evidence, "settings-dark.png"), fullPage: true });
+    await page.reload();
+    await page.getByRole("radio", { name: "dark theme", exact: true }).waitFor();
+    assert.equal(await page.getByRole("radio", { name: "dark theme", exact: true }).getAttribute("aria-checked"), "true");
+    await tab("Home").click();
+    await page.waitForTimeout(350);
+    await page.screenshot({ path: path.join(evidence, "home-dark.png") });
+    const syncCount = state.syncRequests;
+    await tab("Audio").click(); await tab("Home").click(); await tab("Settings").click();
+    assert.equal(state.syncRequests, syncCount, "Navigation within the freshness window must not re-sync");
+    await page.getByRole("radio", { name: "light theme", exact: true }).click();
+    await page.screenshot({ path: path.join(evidence, "settings-light.png"), fullPage: true });
+    await page.emulateMedia({ colorScheme: "dark" });
+    await page.getByRole("radio", { name: "system theme", exact: true }).click();
+    await page.waitForFunction(() => document.documentElement.style.colorScheme === "dark");
+    await page.emulateMedia({ colorScheme: "light" });
+    await page.waitForFunction(() => document.documentElement.style.colorScheme === "light");
+    checks.push("Light/dark settings persist across reload; navigation does not trigger redundant catalog sync");
     for (const width of [320, 390, 430, 768]) {
       await page.setViewportSize({ width, height: 844 });
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false, `Overflow at ${width}px`);
     }
     const storageKeys = await page.evaluate(() => Object.keys(localStorage));
-    assert.ok(!storageKeys.some((key) => /library|manifest/.test(key)));
+    assert.ok(storageKeys.some((key) => key.startsWith("samanvi.catalog.v1.")));
+    const savedAuthorization = await page.evaluate(() => JSON.parse(localStorage.getItem("samanvi.offline.lease.driver-1")));
+    state.incompleteSync = true;
+    await button("Sync now").click();
+    await visible("The announcement service returned an incomplete sync. Your previous downloads are still saved. Please refresh again.");
+    const afterPartial = await page.evaluate(() => JSON.parse(localStorage.getItem("samanvi.offline.lease.driver-1")));
+    assert.equal(afterPartial.offlineUntil, savedAuthorization.offlineUntil);
+    assert.equal(afterPartial.receivedAt, savedAuthorization.receivedAt);
+    state.incompleteSync = false;
+    const expireAccessToken = () => page.evaluate(() => {
+      const key = "samanvi.mobile.auth.session.v1";
+      const saved = JSON.parse(localStorage.getItem(key));
+      saved.accessTokenExpiresAt = Date.now() - 1000;
+      localStorage.setItem(key, JSON.stringify(saved));
+    });
+    await expireAccessToken();
+    await page.reload();
+    await button("Sync now").waitFor();
+    state.authMode = "temporary";
+    await button("Sync now").click();
+    await visible("Session service temporarily unavailable");
+    assert.ok(await page.evaluate(() => localStorage.getItem("samanvi.mobile.auth.session.v1")));
+    state.authMode = "ok";
+    await button("Sync now").click();
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem("samanvi.mobile.auth.session.v1")).accessTokenExpiresAt > Date.now());
+    await button("Sync now").waitFor({ state: "visible" });
+    await expireAccessToken();
+    await page.reload();
+    await button("Sync now").waitFor();
+    state.authMode = "revoked";
+    await button("Sync now").click();
+    await page.getByRole("textbox", { name: "Username", exact: true }).waitFor();
+    await page.waitForFunction(() => !localStorage.getItem("samanvi.offline.lease.driver-1") && !localStorage.getItem("samanvi.mobile.auth.session.v1"));
+    assert.ok(state.refreshRequests >= 3);
+    checks.push("Incomplete sync cannot renew access; temporary auth failure preserves the session; confirmed revocation clears session and lease; System theme follows OS changes");
     assert.deepEqual(errors, []);
-    checks.push("Responsive route layout has no document overflow; only credentials/preferences persist; no browser runtime errors");
+    checks.push("Responsive layout has no overflow; catalog and preferences persist; no browser runtime errors");
     fs.writeFileSync(path.join(evidence, "browser-check.json"), JSON.stringify({ date: new Date().toISOString(), checks, errors }, null, 2));
     console.log(JSON.stringify({ checks, errors }, null, 2));
   } catch (error) {

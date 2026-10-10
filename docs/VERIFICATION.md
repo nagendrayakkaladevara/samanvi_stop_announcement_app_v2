@@ -1,5 +1,24 @@
 # Verification record
 
+## Pinned offline audio and themes — 10 October 2026
+
+| Check | Result |
+| --- | --- |
+| Mobile `npm run verify` | Passed: TypeScript, ESLint and 26 tests |
+| Backend `npm test` | Passed: 72 tests across six files |
+| Backend `npm run build` | Passed |
+| Expo dependency compatibility | `npx expo install --check` passed |
+| Expo web export | Passed with fixture API URL |
+| Expo Android export | Passed: Hermes/JavaScript bundle and assets |
+| Fixture-backed browser audit | Passed: ten check groups, zero page errors |
+| Git whitespace checks | Passed in mobile and backend |
+
+New automated coverage includes expiry/clock rollback, complete versus incomplete sync, unchanged renewal, pin scope and shared files, local-source playback without API calls, missing/corrupt-source recovery, one transfer shared by simultaneous play requests, cancellation, bounded retries, and download policy/storage limits. Backend coverage includes the authenticated consistent snapshot, user-scoped revisions, metadata-only edits, removals and failed-sync behavior.
+
+The browser audit covers existing route/quick playback, mappings, Records and pins; persisted catalog after API failure; Light/Dark persistence and System appearance changes; navigation request deduplication; incomplete-sync lease preservation; temporary token-refresh failure; and confirmed session revocation clearing both session and lease. Screenshots/reports for this run are in `C:\Users\HP\AppData\Local\Temp\opencode\offline-theme-evidence`.
+
+The Android export checks JavaScript bundling, not an APK/native compilation. Real-device FileSystem transfers/resume, offline cold launch, Bluetooth/bus speakers, calls and background playback remain the device checks in [DEVICE-TESTS.md](DEVICE-TESTS.md). Deployment order and the APK command are in [OFFLINE-AUDIO-RELEASE.md](OFFLINE-AUDIO-RELEASE.md). No new admin frontend contract or Prisma migration is required for this release.
+
 ## Break audio mapping update — 9 October 2026
 
 - Mobile typecheck and lint passed; 15 domain tests passed.
@@ -12,7 +31,7 @@ Use `SAMANVI_UI_EVIDENCE_DIR` when running the browser audit to save new reports
 
 The online-only route-announcement implementation was validated on 6 October 2026.
 
-## Automated results
+## Historical online-only results — 6 October 2026
 
 | Check | Result | Scope |
 | --- | --- | --- |
@@ -61,4 +80,4 @@ Playwright is intentionally installed in the temporary validation directory rath
 
 ## Remaining acceptance work
 
-No physical-device, native APK/IPA compilation, actual Bluetooth/bus speaker, OS interruption, Drive-app handoff or live production backend test is claimed. Complete `docs/DEVICE-TESTS.md` using the deployed backend and a development/preview native build. Backend, admin and mobile must be released together because the mobile bootstrap contract changed.
+No physical-device, native APK/IPA compilation, actual Bluetooth/bus speaker, OS interruption, Drive-app handoff or live production backend test is claimed. Complete `docs/DEVICE-TESTS.md` using the deployed backend and a development/preview native build. The original 6 October bootstrap release required coordinated backend/admin/mobile deployment; the 2.1 offline-sync endpoint is additive and supports older clients.

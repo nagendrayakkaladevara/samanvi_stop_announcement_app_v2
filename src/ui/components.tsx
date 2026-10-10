@@ -22,7 +22,7 @@ import {
 } from "react-native-safe-area-context";
 import Feather from "@expo/vector-icons/Feather";
 import { router } from "expo-router";
-import { colors as c, layout } from "./theme";
+import { useColors, useStyles, type Palette, layout } from "./theme";
 import { useLibrary } from "../state/library";
 import { usePlayback } from "../state/playback";
 import { formatDuration, type AudioAsset } from "../domain/catalog";
@@ -33,17 +33,18 @@ export type IconName = ComponentProps<typeof Feather>["name"];
 export function Icon({
   name,
   size = 22,
-  color = c.text,
+  color,
 }: {
   name: IconName;
   size?: number;
   color?: ColorValue;
 }) {
+  const c = useColors();
   return (
     <Feather
       name={name}
       size={size}
-      color={color}
+      color={color ?? c.text}
       accessible={false}
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
@@ -52,6 +53,7 @@ export function Icon({
   );
 }
 export function Label({ children, style, ...props }: TextProps) {
+  const styles = useStyles(makeStyles);
   return (
     <Text {...props} style={[styles.text, style]}>
       {children}
@@ -59,7 +61,9 @@ export function Label({ children, style, ...props }: TextProps) {
   );
 }
 export function Brand() {
+  const styles = useStyles(makeStyles);
   return (
+    <View style={{ backgroundColor: "#FFFFFF", borderRadius: 8, padding: 5 }}>
     <Image
       accessibilityLabel="Samanvi Travels"
       accessibilityRole="image"
@@ -67,6 +71,7 @@ export function Brand() {
       source={require("../../assets/samv_logo.png")}
       style={styles.brandLogo}
     />
+    </View>
   );
 }
 export function FadeIn({
@@ -114,6 +119,8 @@ export function LoadingState({
   label?: string;
   compact?: boolean;
 }) {
+  const c = useColors();
+  const styles = useStyles(makeStyles);
   return (
     <FadeIn>
       <View
@@ -134,6 +141,7 @@ export function Card({
   children,
   style,
 }: PropsWithChildren<{ style?: ViewStyle }>) {
+  const styles = useStyles(makeStyles);
   return <View style={[styles.card, style]}>{children}</View>;
 }
 export function PageHeading({
@@ -143,6 +151,8 @@ export function PageHeading({
   title: string;
   description?: string;
 }) {
+  const c = useColors();
+  const styles = useStyles(makeStyles);
   return (
     <View style={{ gap: 8 }}>
       <Label accessibilityRole="header" style={styles.title}>
@@ -163,6 +173,7 @@ export function StatusPill({
   tone?: "neutral" | "success" | "warning";
   icon?: IconName;
 }) {
+  const c = useColors();
   const color =
     tone === "success" ? c.green : tone === "warning" ? c.amber : c.muted;
   return (
@@ -211,6 +222,8 @@ export function Button({
   disabled?: boolean;
   icon?: IconName;
 }) {
+  const c = useColors();
+  const styles = useStyles(makeStyles);
   return (
     <Pressable
       accessibilityRole="button"
@@ -229,7 +242,7 @@ export function Button({
         <Icon
           name={icon}
           size={19}
-          color={variant === "primary" ? c.surface : c.text}
+          color={variant === "primary" ? c.onAccent : c.text}
         />
       ) : null}
       <Label
@@ -238,7 +251,7 @@ export function Button({
           {
             color:
               variant === "primary"
-                ? c.surface
+                 ? c.onAccent
                 : variant === "quiet"
                   ? c.red
                   : c.text,
@@ -255,7 +268,7 @@ export function IconButton({
   name,
   label,
   onPress,
-  color = c.text,
+  color,
   size = 48,
   disabled = false,
 }: {
@@ -290,6 +303,7 @@ export function SectionTitle({
   action,
   onPress,
 }: PropsWithChildren<{ action?: string; onPress?: () => void }>) {
+  const styles = useStyles(makeStyles);
   return (
     <View style={styles.section}>
       <Label style={styles.sectionTitle}>{children}</Label>
@@ -314,6 +328,8 @@ export function Notice({
   tone?: "info" | "error" | "success";
   onDismiss?: () => void;
 }>) {
+  const c = useColors();
+  const styles = useStyles(makeStyles);
   const color =
     tone === "error" ? c.red : tone === "success" ? c.green : c.blue;
   return (
@@ -364,6 +380,8 @@ export function Screen({
   back?: boolean;
   onRefresh?: () => void | Promise<void>;
 }>) {
+  const c = useColors();
+  const styles = useStyles(makeStyles);
   const library = useLibrary();
   const playback = usePlayback();
   const insets = useSafeAreaInsets();
@@ -437,7 +455,7 @@ export function Screen({
           ) : null}
           {!library.online ? (
             <Notice>
-              Connect to the internet to use announcements and records.
+              {library.offlineValid ? "Offline · downloaded pinned routes are available. Quick announcements and Records need internet." : "Connect and refresh to enable offline audio for your pinned routes."}
             </Notice>
           ) : null}
           {library.error ? (
@@ -461,6 +479,8 @@ export function Screen({
   );
 }
 export function OutputBadge() {
+  const c = useColors();
+  const styles = useStyles(makeStyles);
   const { output } = usePlayback();
   const external = isExternal(output);
   return (
@@ -495,6 +515,8 @@ export function EmptyState({
   title: string;
   description: string;
 }) {
+  const c = useColors();
+  const styles = useStyles(makeStyles);
   return (
     <View style={styles.empty}>
       <View style={styles.heroIcon}>
@@ -550,14 +572,17 @@ export function AudioRow({
   last?: boolean;
   title?: string;
 }) {
-  const { online } = useLibrary();
+  const c = useColors();
+  const styles = useStyles(makeStyles);
+  const { online, isDownloaded } = useLibrary();
+  const downloaded = isDownloaded(audio);
   const start = useStartAnnouncement();
   const playback = usePlayback();
   const current =
     playback.active?.id === audio.id &&
     ["loading", "playing", "paused"].includes(playback.phase);
   const displayTitle = title ?? audio.title;
-  const disabled = !online;
+  const disabled = !online && !downloaded;
   return (
     <Pressable
       accessibilityRole="button"
@@ -586,7 +611,7 @@ export function AudioRow({
         <Label style={styles.caption}>
           {current
             ? playbackPresentation(playback.phase, playback.playing).label
-            : (subtitle ?? `${audioFormat(audio)} · Tap to play`)}
+             : `${subtitle ?? audioFormat(audio)} · ${downloaded ? "Saved offline" : "Online only"}`}
         </Label>
       </View>
       <View
@@ -611,6 +636,8 @@ export function AudioRow({
   );
 }
 export function MiniPlayer() {
+  const c = useColors();
+  const styles = useStyles(makeStyles);
   const { active, phase, playing, pause, resume, position, duration } =
     usePlayback();
   if (!active || phase === "stopped" || phase === "idle") return null;
@@ -642,7 +669,7 @@ export function MiniPlayer() {
     </View>
   );
 }
-export const styles = StyleSheet.create({
+const makeStyles = (c: Palette) => StyleSheet.create({
   text: { color: c.text, fontSize: 15, lineHeight: 22 },
   screen: { flex: 1, backgroundColor: c.background },
   scroll: { flexGrow: 1, padding: layout.gutter, gap: layout.gap },

@@ -15,14 +15,14 @@ import {
   useStartAnnouncement,
 } from "../ui/components";
 import { usePlayback } from "../state/playback";
-import { useLibraryAudio } from "../state/library";
+import { useLibrary } from "../state/library";
 import { isExternal } from "../domain/playback-gate";
-import { colors as c } from "../ui/theme";
+import { useColors } from "../ui/theme";
 
 export default function Speaker() {
+  const c = useColors();
   const { output, refreshOutput } = usePlayback();
-  const audio = useLibraryAudio();
-  const testAudio = audio[0];
+  const { testAudio } = useLibrary();
   const start = useStartAnnouncement();
   const connected = isExternal(output);
   const web = Platform.OS === "web";

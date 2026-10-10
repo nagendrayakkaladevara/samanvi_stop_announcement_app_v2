@@ -23,7 +23,6 @@ import {
   PlaybackGate,
   type Output,
 } from "../domain/playback-gate";
-import { fetchAudio } from "../services/api";
 import type { PlaybackPhase } from "../domain/presentation";
 import { useLibrary } from "./library";
 import {
@@ -59,6 +58,7 @@ type PlaybackContextValue = {
   phase: Phase;
   position: number;
   duration: number;
+  local: boolean;
   output: Output;
   message: string | null;
   play: (audio: AudioAsset, allowPhone?: boolean) => Promise<boolean>;
@@ -74,11 +74,17 @@ const PlaybackContext = createContext<PlaybackContextValue | null>(null);
 export function PlaybackProvider({ children }: PropsWithChildren) {
   const player = useAudioPlayer(null, { updateInterval: 250, downloadFirst: false });
   const status = useAudioPlayerStatus(player);
-  const { online, preferences } = useLibrary();
+  const library = useLibrary();
+  const { online, preferences, resolveAudio, localAllowed, catalog, offlineValid } = library;
+  const libraryRef = useRef(library);
+  useEffect(() => { libraryRef.current = library; }, [library]);
+  const sourceRef = useRef<{ local: boolean; key: string | null; audio: AudioAsset } | null>(null);
+  const [local, setLocal] = useState(false);
   const onlineRef = useRef(online);
   useEffect(() => { onlineRef.current = online; }, [online]);
   const [active, setActive] = useState<AudioAsset | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
+  const [resolving, setResolving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [output, setOutput] = useState<Output>(unknownOutput);
   const outputRef = useRef(output);
@@ -162,14 +168,14 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
         player.pause();
         transition("error");
         setMessage(
-          "This audio could not be streamed. Check your connection and retry.",
+          "This audio could not be played. Retry, or refresh your pinned downloads.",
         );
         lockScreen(false);
       } else if (next.didJustFinish) {
         transition("finished");
         lockScreen(false);
       } else if (next.playing) {
-        if (!onlineRef.current || ["stopped", "interrupted", "error"].includes(phaseRef.current)) {
+        if ((sourceRef.current?.local ? !libraryRef.current.localAllowed(sourceRef.current.audio) : !onlineRef.current) || ["stopped", "interrupted", "error"].includes(phaseRef.current)) {
           player.pause();
           return;
         }
@@ -182,7 +188,7 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
   }, [player, lockScreen, transition]);
 
   useEffect(() => {
-    if (online) return;
+    if (online || sourceRef.current?.local) return;
     gate.current.cancel();
     player.pause();
     // SDK 57 Android rejects replace(null); pausing plus request cancellation
@@ -194,10 +200,23 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
     }
   }, [online, player, lockScreen, transition]);
 
-  useEffect(() => () => { gate.current.cancel(); }, []);
+  useEffect(() => {
+    const source = sourceRef.current;
+    if (source?.local && !localAllowed(source.audio)) {
+      gate.current.cancel(); player.pause(); lockScreen(false); transition("interrupted");
+      setMessage("This download needs reauthorization or is no longer pinned. Refresh your routes.");
+    }
+  }, [catalog, offlineValid, localAllowed, player, lockScreen, transition]);
+
+  useEffect(() => () => {
+    gate.current.cancel();
+    libraryRef.current.releaseAudio(sourceRef.current?.key ?? null);
+  }, []);
 
   useEffect(() => {
-    if (phase !== "loading") return;
+    // Queue preparation has its own progress/stall deadline and may legitimately
+    // take longer on a weak signal. This timer applies only to the native player.
+    if (phase !== "loading" || resolving) return;
     const timeout = setTimeout(() => {
       gate.current.cancel();
       player.pause();
@@ -206,7 +225,7 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
       setMessage("Audio took too long to load. Check your connection and retry.");
     }, 30_000);
     return () => clearTimeout(timeout);
-  }, [phase, player, lockScreen, transition]);
+  }, [phase, resolving, player, lockScreen, transition]);
 
   useEffect(() => {
     if (!preferences.keepAwake || !status.playing || Platform.OS === "web")
@@ -228,7 +247,6 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
       const request = gate.current.next();
       setMessage(null);
       try {
-        if (!onlineRef.current) throw new Error("Connect to the internet to play announcements.");
         const selectedOutput = await refreshOutput();
         if (!gate.current.isCurrent(request)) return false;
         if (
@@ -248,18 +266,33 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
         lockScreen(false);
         activeRef.current = audio;
         setActive(audio);
+        setResolving(true);
         transition("loading");
-        const latest = await fetchAudio(audio.id);
-        if (!gate.current.isCurrent(request) || !onlineRef.current) return false;
-        await setAudioModeAsync({
-          playsInSilentMode: true,
-          allowsRecording: false,
-          shouldPlayInBackground: supportsNativeBackgroundPlayback,
-          interruptionMode: "doNotMix",
-        });
-        if (!gate.current.isCurrent(request)) return false;
+        const source = await resolveAudio(audio);
+        if (!gate.current.isCurrent(request)) { libraryRef.current.releaseAudio(source.key); return false; }
+        if (!source.local && !onlineRef.current) throw new Error("Connect to play this online-only announcement.");
+        try {
+          await setAudioModeAsync({
+            playsInSilentMode: true,
+            allowsRecording: false,
+            shouldPlayInBackground: supportsNativeBackgroundPlayback,
+            interruptionMode: "doNotMix",
+          });
+        } catch (failure) { libraryRef.current.releaseAudio(source.key); throw failure; }
+        if (!gate.current.isCurrent(request)) {
+          libraryRef.current.releaseAudio(source.key); return false;
+        }
+        if (source.local && !localAllowed(source.audio)) {
+          libraryRef.current.releaseAudio(source.key); throw new Error("This audio changed during preparation. Refresh your route.");
+        }
         player.pause();
-        player.replace({ uri: latest.audioUrl });
+        try { player.replace({ uri: source.uri }); }
+        catch (failure) { libraryRef.current.releaseAudio(source.key); throw failure; }
+        const previousKey = sourceRef.current?.key;
+        if (previousKey) libraryRef.current.releaseAudio(previousKey);
+        sourceRef.current = source;
+        setLocal(source.local);
+        setResolving(false);
         allowPhoneRef.current = allowPhone;
         transition("loading");
         lockScreen(true, audio);
@@ -268,6 +301,7 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
         return true;
       } catch (failure) {
         if (gate.current.isCurrent(request)) {
+          setResolving(false);
           if (phaseRef.current === "loading") {
             player.pause();
             lockScreen(false);
@@ -284,6 +318,8 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
       player,
       transition,
       lockScreen,
+      resolveAudio,
+      localAllowed,
     ],
   );
 
@@ -306,13 +342,17 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
   const resume = useCallback(async () => {
     if (!activeRef.current) return;
     if (
-      ["finished", "stopped", "interrupted", "error"].includes(phaseRef.current)
+      ["finished", "stopped", "interrupted", "error"].includes(phaseRef.current) ||
+      sourceRef.current?.audio.id !== activeRef.current.id
     ) {
       await replay();
       return;
     }
     const request = gate.current.next();
-    if (!onlineRef.current) { setMessage("Connect to the internet before resuming."); return; }
+    const source = sourceRef.current;
+    if (source?.local ? !localAllowed(source.audio) : !onlineRef.current) {
+      setMessage("Connect and refresh to resume this announcement."); return;
+    }
     const next = await refreshOutput();
     if (!gate.current.isCurrent(request)) return;
     if (
@@ -324,14 +364,13 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
       return;
     }
     try {
-      await fetchAudio(activeRef.current.id);
-      if (!gate.current.isCurrent(request) || !onlineRef.current) return;
+      if (!gate.current.isCurrent(request)) return;
       lockScreen(true, activeRef.current);
       player.play();
     } catch (failure) {
       if (gate.current.isCurrent(request)) setMessage(readableError(failure));
     }
-  }, [refreshOutput, preferences.requireSpeaker, replay, player, lockScreen]);
+  }, [refreshOutput, preferences.requireSpeaker, replay, player, lockScreen, localAllowed]);
 
   return (
     <PlaybackContext.Provider
@@ -341,6 +380,7 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
         phase,
         position: status.currentTime,
         duration: status.duration,
+        local,
         output,
         message,
         play,

@@ -3,10 +3,13 @@ import { router } from "expo-router";
 import { Card, Icon, Label, StatusPill } from "./components";
 import { useLibrary } from "../state/library";
 import type { RouteSummary } from "../domain/catalog";
-import { colors as c } from "./theme";
+import { useColors, useStyles, type Palette } from "./theme";
 
 export function RouteCard({ route }: { route: RouteSummary }) {
-  const { catalog, togglePin, pinBusy, online } = useLibrary();
+  const c = useColors();
+  const s = useStyles(makeStyles);
+  const { catalog, togglePin, pinBusy, online, readiness } = useLibrary();
+  const status = readiness(route.id);
   const limitReached = (catalog?.routes.filter((item) => item.isPinned).length ?? 0) >= 3;
   const disabled = !online || pinBusy || (!route.isPinned && limitReached);
   return (
@@ -26,6 +29,10 @@ export function RouteCard({ route }: { route: RouteSummary }) {
           <Label style={s.via}>{route.via ? `Via ${route.via}` : "Direct route"}</Label>
           <Icon name="chevron-right" size={20} color={c.red} />
         </View>
+        {route.isPinned ? <View style={{ gap: 7 }}>
+          <StatusPill icon={status.complete ? "check-circle" : "download-cloud"} label={status.label} tone={status.complete ? "success" : "warning"} />
+          {status.total > 0 ? <Label style={{ color: c.muted, fontSize: 12 }}>{status.ready} of {status.total} announcements ready</Label> : null}
+        </View> : null}
       </Pressable>
       <Pressable
         accessibilityRole="button"
@@ -42,7 +49,7 @@ export function RouteCard({ route }: { route: RouteSummary }) {
     </Card>
   );
 }
-const s = StyleSheet.create({
+const makeStyles = (c: Palette) => StyleSheet.create({
   body: { padding: 18, gap: 13 },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
   code: { fontSize: 13, fontWeight: "700", color: c.red, letterSpacing: 1 },

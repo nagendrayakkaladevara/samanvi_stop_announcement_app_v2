@@ -1,36 +1,65 @@
-# Online mobile API contract
+# Mobile API contract
 
-Base: `EXPO_PUBLIC_API_BASE_URL`, including `/api/v1`. Every announcement request uses the separate mobile-driver bearer token. Auth login/refresh/logout and device binding use the existing `/mobile/auth` endpoints.
-
-Success envelope: `{ "success": true, "data": ... }`. Responses are private and `no-store`.
+Base: `EXPO_PUBLIC_API_BASE_URL`, including `/api/v1`. Every announcement request uses the separate mobile-driver bearer token. Auth login/refresh/logout and device binding use `/mobile/auth` endpoints. Success envelope: `{ "success": true, "data": ... }`. Responses remain private and `no-store`; the app explicitly manages its per-account catalog and files.
 
 | Method | Path | Data |
 | --- | --- | --- |
-| GET | `/mobile/announcements/bootstrap` | `routes`, `quickAnnouncements`, nullable `recordsDriveUrl`, `maxPinnedRoutes: 3` |
+| POST | `/mobile/announcements/sync` | Version-aware full pinned snapshot or unchanged renewal, described below |
+| GET | `/mobile/announcements/bootstrap` | Legacy/online fallback: `routes`, `quickAnnouncements`, nullable `recordsDriveUrl`, `maxPinnedRoutes: 3` |
 | GET | `/mobile/announcements/routes` | `{ routes }`, optional search |
 | GET | `/mobile/announcements/routes/:id/announcements` | `{ routeId, route, announcements }` |
 | GET | `/mobile/announcements/quick-announcements` | `{ quickAnnouncements }` |
-| GET | `/mobile/announcements/audios/:id` | Currently available streaming audio |
+| GET | `/mobile/announcements/audios/:id` | Currently available online audio |
 | GET | `/mobile/announcements/config` | `{ recordsDriveUrl }` |
 | GET | `/mobile/users/me/pinned-routes` | `{ routes, maxPinnedRoutes: 3 }` |
-| POST / DELETE | `/mobile/users/me/pinned-routes/:id` | Updated pinned routes; mutations are idempotent |
+| POST / DELETE | `/mobile/users/me/pinned-routes/:id` | Updated pinned routes; idempotent, server-confirmed mutations |
 
-Route cards: `{ id, routeId, startLocation, endLocation, via, busType, isPinned }`. URL parameters use the internal `id`; `routeId` is the human-readable code such as `ST-A02`. `busType` is `AC` or `Non-AC`; empty Via means a direct route.
+Route cards: `{ id, routeId, startLocation, endLocation, via, busType, isPinned, version? }`. URL parameters use internal `id`; `routeId` is the human-readable code. `busType` is `AC` or `Non-AC`.
 
-Audio: `{ id, title, audioUrl, mimeType?, durationMs? }`. Audio URLs must use HTTPS. Route announcements add an explicit positive integer `sequence`, returned in strictly ascending order. Gaps are allowed and displayed as received. The app does not infer the order.
+Audio: `{ id, title, audioUrl, mimeType?, durationMs?, sizeBytes?, contentRevision?, checksumSha256? }`. Remote URLs must be HTTPS. `sizeBytes` and the 64-character lowercase hexadecimal `contentRevision` are required for downloaded media in sync snapshots. `checksumSha256` may be null for existing uploads. The native client verifies exact byte count and any supplied SHA-256, then stores a locally computed SHA-256 for future corruption checks. Storage ETag is not used as a SHA-256 checksum.
+
+Route announcements add `sequence`: a positive integer, strictly ascending, with gaps preserved. Title/label/order edits do not change media content identity.
 
 Quick announcements:
-- `welcome-note`: `type: MULTIPLE`, `audios: [...]` containing all ready welcome-note assets.
-- `dinner-break` / `toilet-break`: `type: SINGLE`, `audioUrl` plus a single `audio` object. Both are null if unavailable.
+- `welcome-note`: `type: MULTIPLE`, `audios: [...]` containing ready welcome-note assets.
+- `dinner-break` / `toilet-break`: `type: SINGLE`, `audioUrl` plus `audio`, both null if unavailable.
+- Quick audio remains online-only. Home reuses recent metadata on focus and resolves the latest mapping when a quick action is tapped.
 
-Home refreshes `/quick-announcements` on focus and before a quick button is played. The button shows the mapped audio title, not an inferred mapping based on its title/category. If a mapping is removed or replaced while Home is open, the next tap uses the live selection and never intentionally plays the previously mapped file. Failed mapping checks show an error without starting playback; leaving Home cancels the pending playback intent.
+## Pinned-route synchronization
 
-The backend rejects a fourth pin with HTTP 409 and `code: PIN_LIMIT_REACHED`. Pins are user-specific. On a failed mutation the app reloads server state; it never queues a write for later.
+Request: `POST /mobile/announcements/sync` with JSON `{}` initially, or `{ "revision": "<previous snapshot SHA-256>" }` subsequently. Revision is user-scoped. The server uses a repeatable-read transaction for a consistent snapshot.
 
-Before playback/resume, the app resolves the audio against the live backend. Expo Audio streams the URL with `downloadFirst: false`. Catalog data is held in memory only and reloaded on startup, route entry and reconnect. Network loss stops the player. API requests time out after 20 seconds; player loading has a 30-second recovery timeout.
+Changed/initial response data:
 
-## Admin/deployment setup
+```json
+{
+  "revision": "<64-character SHA-256>",
+  "unchanged": false,
+  "serverTime": "2026-10-10T00:00:00.000Z",
+  "offlineUntil": "2026-11-09T00:00:00.000Z",
+  "catalog": {
+    "routes": [],
+    "quickAnnouncements": [],
+    "recordsDriveUrl": null,
+    "maxPinnedRoutes": 3
+  },
+  "pinnedRoutes": []
+}
+```
 
-Apply backend migration `20261005120000_online_route_announcements` before deploying the matching frontend/mobile code. In Audio App, review route Via/bus type (existing rows migrate to `Non-AC`), configure Dinner/Toilet common audios, upload welcome-note files and set the Records Drive URL. The Records URL must be HTTPS on `drive.google.com`; the mobile app has no hard-coded folder.
+`catalog` has the bootstrap shape. `pinnedRoutes` is the complete set of this driver's published pins (maximum three), each with the route-announcements response shape. Absence from this complete snapshot removes offline eligibility; no separate tombstone feed is needed. It contains only ready/playable audio.
 
-Administrators can now choose Dinner Break or Toilet Break during frontend upload, or use Map to app on an existing Common audio file. The admin backend maps it through `PUT /announcements/audios/:audioId/break-mapping` using the existing settings fields; the mobile contract is unchanged. No new migration is needed for mapping.
+When the submitted revision matches, the server returns `unchanged: true`, the same `revision`, and fresh `serverTime`/`offlineUntil`, omitting `catalog` and `pinnedRoutes`. HTTP status is 200 in both cases. Unchanged renewal still performs authorization and database reads, but saves response bytes; the mobile 15-minute freshness window and in-flight deduplication reduce actual request count.
+
+Only successful authenticated sync renews the 30-day lease. Failed/partial responses, playback, pin changes, app restarts and token refresh alone cannot renew it. Local authorization metadata is stored in native SecureStore separately from media/catalog files. Large backward clock changes require reauthorization. Logout and confirmed account/session revocation remove local access. A disconnected device cannot learn revocation until sync or lease expiry.
+
+## Playback and compatibility
+
+- Verified, authorized pinned downloads play/resume/replay with no playback API or media requests.
+- If a pinned file is being prepared, tapping it waits for the same queue transfer. Deferred downloads (for example Wi-Fi-only on cellular) may use online streaming when requested.
+- Online-only audio resolves current availability before starting. Resuming an already loaded source does not perform another lookup.
+- Server-confirmed pins trigger full sync. A fourth pin returns HTTP 409 with `code: PIN_LIMIT_REACHED`.
+- Metadata refresh failures preserve the last good catalog. Authentication transport failures preserve the saved session; explicit auth rejection clears it.
+- Old mobile clients can continue using existing endpoints. New clients fall back to the online bootstrap if the sync endpoint returns 404 during staggered deployment.
+
+No database migration is added by this feature; existing route versions and audio metadata are reused. Deploy backend before distributing the new native app.

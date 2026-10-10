@@ -1,13 +1,13 @@
 import React, { createContext, useCallback, useContext, useEffect, useState, type PropsWithChildren } from "react";
-import { AppState } from "react-native";
 import {
   loginMobileDriver,
   logoutMobileDriver,
-  refreshAuthSession,
   setAuthFailureHandler,
   setCurrentAuthSession,
+  getCurrentAuthSession,
 } from "../services/api";
 import { loadAuthSession, saveAuthSession, type MobileAuthSession } from "../services/auth-storage";
+import { writeLease } from "../services/offline-lease";
 
 type AuthContextValue = {
   session: MobileAuthSession | null;
@@ -26,22 +26,25 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [message, setMessage] = useState<string | null>(null);
 
   const invalidate = useCallback(async (reason: string) => {
+    const previous = getCurrentAuthSession();
     setCurrentAuthSession(null);
-    await saveAuthSession(null);
     setSession(null);
     setMessage(reason);
+    await Promise.all([saveAuthSession(null), previous ? writeLease(previous.user.id, null) : Promise.resolve()]);
   }, []);
 
   useEffect(() => {
-    setAuthFailureHandler((reason) => { void invalidate(reason); });
+    setAuthFailureHandler((reason) => { void invalidate(reason).catch(() => setMessage(reason)); });
     let cancelled = false;
     void (async () => {
       try {
         const saved = await loadAuthSession();
+        if (cancelled) return;
         setCurrentAuthSession(saved);
         if (!saved) return;
-        const refreshed = await refreshAuthSession();
-        if (!cancelled) setSession(refreshed);
+        // Restore immediately. Online requests refresh when needed; downloaded
+        // playback has its own server-issued, 30-day offline lease.
+        if (!cancelled) setSession(saved);
       } catch (error) {
         if (!cancelled) await invalidate(error instanceof Error ? error.message : "Please sign in again.");
       } finally {
@@ -51,16 +54,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
     return () => { cancelled = true; setAuthFailureHandler(null); };
   }, [invalidate]);
 
-  useEffect(() => {
-    if (!session) return;
-    const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "active") {
-        void refreshAuthSession().then(setSession).catch((error) => invalidate(error instanceof Error ? error.message : "Please sign in again."));
-      }
-    });
-    return () => subscription.remove();
-  }, [invalidate, session]);
-
   const signIn = useCallback(async (username: string, password: string) => {
     setMessage(null);
     const next = await loginMobileDriver(username, password);
@@ -68,10 +61,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const signOut = useCallback(async () => {
-    try { await logoutMobileDriver(); }
+    const userId = session?.user.id;
+    setSession(null);
+    try {
+      await Promise.all([logoutMobileDriver(), userId ? writeLease(userId, null) : Promise.resolve()]);
+    }
     catch { /* Local sign-out still succeeds when the service is unreachable. */ }
-    finally { setSession(null); setMessage("You have been signed out."); }
-  }, []);
+    finally {
+      setMessage("You have been signed out.");
+    }
+  }, [session]);
 
   return <AuthContext.Provider value={{ session, loading, message, signIn, signOut, clearMessage: () => setMessage(null) }}>{children}</AuthContext.Provider>;
 }

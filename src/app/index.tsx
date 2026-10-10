@@ -10,9 +10,11 @@ import {
   Notice,
 } from "../ui/components";
 import { useLibrary } from "../state/library";
-import { colors as c } from "../ui/theme";
+import { useColors, useStyles, type Palette } from "../ui/theme";
 
 export default function Welcome() {
+  const c = useColors();
+  const s = useStyles(makeStyles);
   const { loading, busy, preferences, setPreference, error } = useLibrary();
   if (!loading && preferences.entered) return <Redirect href="/(tabs)" />;
   return (
@@ -25,8 +27,8 @@ export default function Welcome() {
           </View>
           <Label style={s.title}>Every stop,{"\n"}clearly announced.</Label>
           <Label style={s.copy}>
-            Connect the bus speaker and choose a route. Stream announcements
-            throughout your journey with an internet connection.
+            Connect the bus speaker and pin your frequent routes. Once downloaded,
+            their announcements work even when your signal drops.
           </Label>
         </View>
         <View style={s.footer}>
@@ -45,7 +47,7 @@ export default function Welcome() {
     </SafeAreaView>
   );
 }
-const s = StyleSheet.create({
+const makeStyles = (c: Palette) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: c.surface },
   content: { flexGrow: 1, padding: 24, gap: 32 },
   center: {

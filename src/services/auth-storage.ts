@@ -24,6 +24,7 @@ async function setItem(key: string, value: string | null): Promise<void> {
 
 export type MobileAuthSession = {
   accessToken: string;
+  accessTokenExpiresAt?: number;
   refreshToken: string;
   refreshTokenExpiresAt: string;
   user: {
@@ -34,7 +35,9 @@ export type MobileAuthSession = {
   };
 };
 
+let sessionWrites: Promise<void> = Promise.resolve();
 export async function loadAuthSession(): Promise<MobileAuthSession | null> {
+  await sessionWrites.catch(() => undefined);
   const raw = await getItem(SESSION_KEY);
   if (!raw) return null;
   try {
@@ -45,8 +48,11 @@ export async function loadAuthSession(): Promise<MobileAuthSession | null> {
   }
 }
 
-export const saveAuthSession = (session: MobileAuthSession | null) =>
-  setItem(SESSION_KEY, session ? JSON.stringify(session) : null);
+export function saveAuthSession(session: MobileAuthSession | null): Promise<void> {
+  const value = session ? JSON.stringify(session) : null;
+  sessionWrites = sessionWrites.catch(() => undefined).then(() => setItem(SESSION_KEY, value));
+  return sessionWrites;
+}
 
 export async function getInstallationId(): Promise<string> {
   const existing = await getItem(INSTALLATION_KEY);

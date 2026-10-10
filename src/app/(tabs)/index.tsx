@@ -15,7 +15,7 @@ import {
 import { RouteCard } from "../../ui/route-card";
 import { useLibrary } from "../../state/library";
 import { useAuth } from "../../state/auth";
-import { colors as c } from "../../ui/theme";
+import { useColors, useStyles, type Palette } from "../../ui/theme";
 import { quickAnnouncementSummary, readableError } from "../../domain/catalog";
 
 const quick: { key: string; title: string; icon: IconName }[] = [
@@ -24,6 +24,8 @@ const quick: { key: string; title: string; icon: IconName }[] = [
   { key: "toilet-break", title: "Toilet Break", icon: "users" },
 ];
 export default function Home() {
+  const c = useColors();
+  const s = useStyles(makeStyles);
   const { catalog, loading, online, refreshQuickAnnouncements } = useLibrary();
   const { session } = useAuth();
   const pinned = catalog?.routes.filter((route) => route.isPinned) ?? [];
@@ -48,7 +50,7 @@ export default function Home() {
     setChecking(key);
     try {
       // Resolve the current mapping, not an audio cached before the admin changed it.
-      const announcements = await refreshQuickAnnouncements();
+      const announcements = await refreshQuickAnnouncements(true);
       if (version !== playRequest.current) return;
       const announcement = announcements.find((item) => item.id === key);
       if (announcement?.type === "MULTIPLE" && announcement.audios.length) router.push("/welcome-notes");
@@ -127,7 +129,7 @@ export default function Home() {
     </Screen>
   );
 }
-const s = StyleSheet.create({
+const makeStyles = (c: Palette) => StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",

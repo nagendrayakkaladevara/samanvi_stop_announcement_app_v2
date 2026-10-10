@@ -2,10 +2,9 @@ import { Platform } from "react-native";
 import * as Application from "expo-application";
 import * as Device from "expo-device";
 import { z } from "zod";
-import { audioSchema, bootstrapSchema, configSchema, pinnedRoutesSchema, quickAnnouncementsSchema, routeAnnouncementsSchema } from "../domain/catalog";
+import { audioSchema, bootstrapSchema, configSchema, pinnedRoutesSchema, quickAnnouncementsSchema, routeAnnouncementsSchema, syncResponseSchema } from "../domain/catalog";
 import {
   getInstallationId,
-  loadAuthSession,
   saveAuthSession,
   type MobileAuthSession,
 } from "./auth-storage";
@@ -23,6 +22,7 @@ const sessionSchema = z.object({
   accessToken: z.string(),
   refreshToken: z.string(),
   refreshTokenExpiresAt: z.string(),
+  accessTokenExpiresIn: z.union([z.string(), z.number()]).optional(),
   user: userSchema,
 }).passthrough();
 
@@ -40,9 +40,20 @@ export class MobileApiError extends Error {
 let currentSession: MobileAuthSession | null = null;
 let refreshPromise: Promise<MobileAuthSession> | null = null;
 let authFailureHandler: ((message: string) => void) | null = null;
+let sessionEpoch = 0;
 
 export function setCurrentAuthSession(session: MobileAuthSession | null) {
+  sessionEpoch++;
+  refreshPromise = null;
   currentSession = session;
+}
+export const getCurrentAuthSession = () => currentSession;
+
+function withExpiry(session: z.infer<typeof sessionSchema>): MobileAuthSession {
+  const ttl = session.accessTokenExpiresIn;
+  const match = typeof ttl === "string" ? /^(\d+)\s*([smhd])$/.exec(ttl) : null;
+  const seconds = typeof ttl === "number" ? ttl : match ? Number(match[1]) * ({ s: 1, m: 60, h: 3600, d: 86400 }[match[2]] ?? 0) : 0;
+  return { ...session, accessTokenExpiresAt: seconds ? Date.now() + seconds * 1000 : undefined };
 }
 
 export function setAuthFailureHandler(handler: ((message: string) => void) | null) {
@@ -60,7 +71,13 @@ async function rawRequest(path: string, init: RequestInit): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20_000);
   try {
-    return await fetch(`${configuredUrl}${path}`, { ...init, cache: "no-store", signal: controller.signal });
+    const response = await fetch(`${configuredUrl}${path}`, { ...init, cache: "no-store", signal: controller.signal });
+    // Keep the deadline active through the entire JSON body, not just headers.
+    // A dropped signal halfway through a sync must not leave it pending forever.
+    const body = await response.text();
+    return new Response([204, 205, 304].includes(response.status) ? null : body, {
+      status: response.status, statusText: response.statusText, headers: response.headers,
+    });
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") throw new Error("The connection timed out. Try again when your signal improves.");
     if (error instanceof TypeError) throw new Error("Cannot reach the announcement service. Check your internet connection.");
@@ -77,45 +94,65 @@ async function parseError(response: Response): Promise<MobileApiError> {
 }
 
 async function performRefresh(): Promise<MobileAuthSession> {
-  currentSession ??= await loadAuthSession();
-  if (!currentSession) throw new MobileApiError("Please sign in to continue.", 401, "MOBILE_AUTH_REQUIRED");
+  const epoch = sessionEpoch;
+  const session = currentSession;
+  if (!session) throw new MobileApiError("Please sign in to continue.", 401, "MOBILE_AUTH_REQUIRED");
+  const installationId = await getInstallationId();
+  if (epoch !== sessionEpoch) throw new Error("The signed-in account changed.");
   const response = await rawRequest("/mobile/auth/refresh", {
     method: "POST",
     headers: { Accept: "application/json", "Content-Type": "application/json" },
-    body: JSON.stringify({ refreshToken: currentSession.refreshToken, installationId: await getInstallationId() }),
+    body: JSON.stringify({ refreshToken: session.refreshToken, installationId }),
   });
+  if (epoch !== sessionEpoch) throw new Error("The signed-in account changed.");
   if (!response.ok) throw await parseError(response);
   const parsed = z.object({ success: z.literal(true), data: sessionSchema }).parse(await response.json());
-  currentSession = parsed.data;
-  await saveAuthSession(currentSession);
-  return currentSession;
+  if (epoch !== sessionEpoch) throw new Error("The signed-in account changed.");
+  const next = withExpiry(parsed.data);
+  currentSession = next;
+  await saveAuthSession(next);
+  if (epoch !== sessionEpoch) throw new Error("The signed-in account changed.");
+  return next;
 }
 
 export async function refreshAuthSession(): Promise<MobileAuthSession> {
-  refreshPromise ??= performRefresh().finally(() => { refreshPromise = null; });
+  if (!refreshPromise) {
+    const operation = performRefresh().finally(() => { if (refreshPromise === operation) refreshPromise = null; });
+    refreshPromise = operation;
+  }
   return refreshPromise;
 }
 
 async function authenticatedRequest(path: string, init: RequestInit = {}, retry = true): Promise<Response> {
-  currentSession ??= await loadAuthSession();
+  const epoch = sessionEpoch;
   if (!currentSession) throw new MobileApiError("Please sign in to continue.", 401, "MOBILE_AUTH_REQUIRED");
+  if (retry && currentSession.accessTokenExpiresAt && currentSession.accessTokenExpiresAt < Date.now() + 30_000) {
+    try { await refreshAuthSession(); }
+    catch (error) {
+      if (epoch === sessionEpoch && error instanceof MobileApiError && [401, 403].includes(error.status ?? 0)) authFailureHandler?.(error.message);
+      throw error;
+    }
+  }
+  if (epoch !== sessionEpoch || !currentSession) throw new Error("The signed-in account changed.");
   const response = await rawRequest(path, {
     ...init,
     headers: { Accept: "application/json", ...init.headers, Authorization: `Bearer ${currentSession.accessToken}` },
   });
+  if (epoch !== sessionEpoch) throw new Error("The signed-in account changed.");
   if (response.status === 401 && retry) {
     try {
       await refreshAuthSession();
+      if (epoch !== sessionEpoch) throw new Error("The signed-in account changed.");
       return authenticatedRequest(path, init, false);
     } catch (error) {
       const failure = error instanceof Error ? error.message : "Your session is no longer valid.";
-      if (error instanceof MobileApiError && (error.status === 401 || error.status === 403)) authFailureHandler?.(failure);
+      if (epoch === sessionEpoch && error instanceof MobileApiError && (error.status === 401 || error.status === 403)) authFailureHandler?.(failure);
       throw error;
     }
   }
   if (!response.ok) {
     const error = await parseError(response);
-    if (response.status === 401) authFailureHandler?.(error.message);
+    if (epoch === sessionEpoch && (response.status === 401 || response.status === 403)) authFailureHandler?.(error.message);
     throw error;
   }
   return response;
@@ -141,18 +178,19 @@ export async function loginMobileDriver(username: string, password: string): Pro
   });
   if (!response.ok) throw await parseError(response);
   const parsed = z.object({ success: z.literal(true), data: sessionSchema }).parse(await response.json());
-  currentSession = parsed.data;
-  await saveAuthSession(currentSession);
-  return currentSession;
+  const next = withExpiry(parsed.data);
+  setCurrentAuthSession(next);
+  await saveAuthSession(next);
+  return next;
 }
 
 export async function logoutMobileDriver(): Promise<void> {
-  try {
-    if (currentSession) await authenticatedRequest("/mobile/auth/logout", { method: "POST" }, false);
-  } finally {
-    currentSession = null;
-    await saveAuthSession(null);
-  }
+  const previous = currentSession;
+  setCurrentAuthSession(null);
+  await saveAuthSession(null);
+  if (previous) await rawRequest("/mobile/auth/logout", {
+    method: "POST", headers: { Authorization: `Bearer ${previous.accessToken}` },
+  });
 }
 
 async function get<T>(path: string, schema: z.ZodType<T>): Promise<T> {
@@ -167,6 +205,14 @@ export const fetchQuickAnnouncements = () => get("/quick-announcements", quickAn
 export const fetchRouteAnnouncements = (id: string) => get(`/routes/${encodeURIComponent(id)}/announcements`, routeAnnouncementsSchema);
 export const fetchAudio = (id: string) => get(`/audios/${encodeURIComponent(id)}`, audioSchema);
 export const fetchConfig = () => get("/config", configSchema);
+export async function syncAnnouncements(revision?: string) {
+  const response = await authenticatedRequest("/mobile/announcements/sync", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ revision }),
+  });
+  const envelope = z.object({ success: z.literal(true), data: syncResponseSchema }).safeParse(await response.json());
+  if (!envelope.success) throw new Error("The announcement service returned an incomplete sync. Your previous downloads are still saved. Please refresh again.");
+  return envelope.data.data;
+}
 export async function updatePinnedRoute(id: string, pinned: boolean) {
   const response = await authenticatedRequest(`/mobile/users/me/pinned-routes/${encodeURIComponent(id)}`, { method: pinned ? "POST" : "DELETE" });
   return z.object({ success: z.literal(true), data: pinnedRoutesSchema }).parse(await response.json()).data;

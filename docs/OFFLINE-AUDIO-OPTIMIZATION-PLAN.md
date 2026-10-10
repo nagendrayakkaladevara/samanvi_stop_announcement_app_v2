@@ -1,6 +1,6 @@
 # Offline audio and API cost optimization plan
 
-Status: proposed; documentation only. No behavior described as proposed below is implemented by this document.
+Status: original architecture proposal. Pinned-route offline playback and themes are now implemented; see [release implementation notes](OFFLINE-AUDIO-RELEASE.md) for actual behavior, validation and deployment. The analysis below retains the original baseline and broader optimization roadmap.
 
 Reviewed: 2026-10-09.
 

@@ -3,9 +3,10 @@ import * as SecureStore from "expo-secure-store";
 import { z } from "zod";
 
 const key = "samanvi.preferences.v3";
-const schema = z.object({ keepAwake: z.boolean(), requireSpeaker: z.boolean(), entered: z.boolean() });
+const schema = z.object({ keepAwake: z.boolean(), requireSpeaker: z.boolean(), entered: z.boolean(),
+  wifiOnly: z.boolean().default(false), storageMB: z.union([z.literal(100), z.literal(250), z.literal(500)]).default(250) });
 export type Preferences = z.infer<typeof schema>;
-export const defaultPreferences: Preferences = { keepAwake: true, requireSpeaker: true, entered: false };
+export const defaultPreferences: Preferences = { keepAwake: true, requireSpeaker: true, entered: false, wifiOnly: false, storageMB: 250 };
 
 export async function readPreferences(): Promise<Preferences> {
   const raw = Platform.OS === "web" ? globalThis.localStorage?.getItem(key) : await SecureStore.getItemAsync(key);

@@ -2,9 +2,10 @@ import { Tabs } from "expo-router";
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon, MiniPlayer } from "../../ui/components";
-import { colors as c } from "../../ui/theme";
+import { useColors } from "../../ui/theme";
 
 export default function TabLayout() {
+  const c = useColors();
   const insets = useSafeAreaInsets();
   return (
     <View style={{ flex: 1 }}>

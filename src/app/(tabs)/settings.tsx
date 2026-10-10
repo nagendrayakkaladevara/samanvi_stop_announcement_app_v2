@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Platform, Pressable, Switch, View } from "react-native";
 import { router } from "expo-router";
 import {
@@ -7,10 +8,11 @@ import {
   Screen,
   SectionTitle,
   Notice,
+  Button,
   type IconName,
 } from "../../ui/components";
 import { useLibrary } from "../../state/library";
-import { colors as c } from "../../ui/theme";
+import { useColors, useTheme, type ThemeMode } from "../../ui/theme";
 import { useAuth } from "../../state/auth";
 import { confirmAction } from "../../ui/components";
 
@@ -23,6 +25,7 @@ function Row({
   title: string;
   onPress: () => void;
 }) {
+  const c = useColors();
   return (
     <Pressable
       accessibilityRole="button"
@@ -43,7 +46,11 @@ function Row({
   );
 }
 export default function Settings() {
-  const { preferences, setPreference } = useLibrary();
+  const c = useColors();
+  const theme = useTheme();
+  const [themeError, setThemeError] = useState<string | null>(null);
+  const library = useLibrary();
+  const { preferences, setPreference } = library;
   const auth = useAuth();
   return (
     <Screen title="Settings" kicker="Preferences & support">
@@ -73,6 +80,64 @@ export default function Settings() {
             Published announcement library
           </Label>
         </View>
+      </Card>
+      <SectionTitle>Appearance</SectionTitle>
+      <Card style={{ padding: 18, gap: 14 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <Icon name={theme.dark ? "moon" : "sun"} color={c.red} size={20} />
+          <View style={{ flex: 1, gap: 3 }}>
+            <Label style={{ fontWeight: "600" }}>Your preferred light</Label>
+            <Label style={{ color: c.muted, fontSize: 13 }}>Comfortable controls, day or night.</Label>
+          </View>
+        </View>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          {(["light", "dark", "system"] as ThemeMode[]).map((mode) => (
+            <Pressable key={mode} accessibilityRole="radio" accessibilityState={{ checked: theme.mode === mode }} aria-checked={theme.mode === mode}
+              accessibilityLabel={`${mode} theme`} onPress={() => {
+                setThemeError(null);
+                void theme.setMode(mode).catch(() => setThemeError("Could not save appearance. Please try again."));
+              }} style={{ flex: 1, minHeight: 52, borderRadius: 12, borderWidth: 1,
+                borderColor: theme.mode === mode ? c.red : c.line, backgroundColor: theme.mode === mode ? c.redSoft : c.background,
+                justifyContent: "center", alignItems: "center" }}>
+              <Label style={{ color: theme.mode === mode ? c.red : c.muted, fontWeight: "600", fontSize: 13 }}>{mode[0].toUpperCase() + mode.slice(1)}</Label>
+            </Pressable>
+          ))}
+        </View>
+        {themeError ? <Notice tone="error">{themeError}</Notice> : null}
+      </Card>
+      <SectionTitle>Pinned-route downloads</SectionTitle>
+      <Card style={{ padding: 18, gap: 14 }}>
+        <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
+          <Icon name="download-cloud" color={c.red} />
+          <View style={{ flex: 1, gap: 4 }}>
+            <Label style={{ fontWeight: "600" }}>{(library.storageBytes / (1024 * 1024)).toFixed(1)} MB saved on this phone</Label>
+            <Label style={{ color: c.muted, fontSize: 13 }}>Only your pinned routes · up to 3 routes</Label>
+          </View>
+        </View>
+        <Label style={{ color: c.muted, fontSize: 13, lineHeight: 21 }}>
+          {library.offlineSupported ? "Wait for Ready offline before departure. Downloads work for 30 days after sync; refreshing applies changes immediately." : "Offline downloads are available in the Android/iOS app. This browser preview streams online."}
+        </Label>
+        {library.lastSync ? <Label style={{ fontSize: 12, color: c.muted }}>Last sync: {new Date(library.lastSync).toLocaleString()}</Label> : null}
+        {library.offlineUntil ? <Label style={{ fontSize: 12, color: library.offlineValid ? c.green : c.amber }}>Offline access until {new Date(library.offlineUntil).toLocaleDateString()}</Label> : null}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <View style={{ flex: 1, gap: 3 }}>
+            <Label>Download on Wi-Fi only</Label>
+            <Label style={{ color: c.muted, fontSize: 12 }}>Off allows mobile-data downloads</Label>
+          </View>
+          <Switch accessibilityLabel="Download on Wi-Fi only" value={preferences.wifiOnly}
+            onValueChange={(value) => void setPreference("wifiOnly", value)} trackColor={{ false: c.switchTrack, true: c.red }} thumbColor={c.surface} />
+        </View>
+        <Label style={{ color: c.muted, fontSize: 13 }}>Download storage limit</Label>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          {([100, 250, 500] as const).map((size) => <Pressable key={size} accessibilityRole="radio"
+            accessibilityLabel={`${size} MB download limit`} accessibilityState={{ checked: preferences.storageMB === size }} aria-checked={preferences.storageMB === size}
+            onPress={() => void setPreference("storageMB", size)} style={{ flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center",
+              borderRadius: 10, backgroundColor: preferences.storageMB === size ? c.redSoft : c.background }}>
+            <Label style={{ fontSize: 13, color: preferences.storageMB === size ? c.red : c.muted }}>{size} MB</Label>
+          </Pressable>)}
+        </View>
+        <Button title="Sync now" icon="refresh-cw" disabled={!!library.busy || !library.online} onPress={() => void library.refresh()} />
+        <Button title="Retry downloads" variant="secondary" disabled={!library.offlineSupported || !library.online} onPress={library.retryDownloads} />
       </Card>
       <SectionTitle>Audio</SectionTitle>
       <Card>
@@ -134,12 +199,12 @@ export default function Settings() {
               hitSlop={12}
               value={preferences[item.key]}
               onValueChange={(value) => void setPreference(item.key, value)}
-              trackColor={{ false: "#C9C9CF", true: c.red }}
+              trackColor={{ false: c.switchTrack, true: c.red }}
               thumbColor={c.surface}
               {...(Platform.OS === "web"
                 ? { activeThumbColor: c.surface }
                 : {})}
-              ios_backgroundColor="#C9C9CF"
+              ios_backgroundColor={c.switchTrack}
             />
           </View>
         ))}
@@ -164,7 +229,7 @@ export default function Settings() {
           marginTop: 20,
         }}
       >
-        Samanvi Driver · Version 2.0 pilot
+        Samanvi Driver · Version 2.1
       </Label>
     </Screen>
   );

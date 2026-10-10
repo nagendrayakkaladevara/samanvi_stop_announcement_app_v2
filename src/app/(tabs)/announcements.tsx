@@ -4,12 +4,13 @@ import { useFocusEffect } from "expo-router";
 import { Button, Card, EmptyState, Icon, Label, Screen } from "../../ui/components";
 import { RouteCard } from "../../ui/route-card";
 import { useLibrary } from "../../state/library";
-import { colors as c } from "../../ui/theme";
+import { useColors } from "../../ui/theme";
 
 export default function Announcements() {
+  const c = useColors();
   const { catalog, refresh, busy, loading } = useLibrary();
   const [search, setSearch] = useState("");
-  useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
+  useFocusEffect(useCallback(() => { void refresh(false); }, [refresh]));
   const routes = catalog?.routes.filter((route) =>
     `${route.routeId} ${route.startLocation} ${route.endLocation} ${route.via} ${route.busType}`.toLowerCase().includes(search.trim().toLowerCase()),
   ) ?? [];
@@ -22,6 +23,7 @@ export default function Announcements() {
       </Card>
       <View style={{ gap: 4 }}>
         <Label style={{ color: c.muted, fontSize: 13 }}>{pins} of 3 routes pinned</Label>
+        <Label style={{ color: c.muted, fontSize: 13 }}>Pin your frequent routes to download their audio automatically.</Label>
         {pins === 3 ? <Label style={{ color: c.amber, fontSize: 13 }}>Unpin a route to pin another.</Label> : null}
       </View>
       {routes.map((route) => <RouteCard key={route.id} route={route} />)}

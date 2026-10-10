@@ -8,6 +8,9 @@ export const audioSchema = z.object({
   audioUrl: httpsUrl,
   mimeType: z.string().optional(),
   durationMs: z.number().nonnegative().nullable().optional(),
+  sizeBytes: z.number().int().positive().optional(),
+  contentRevision: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  checksumSha256: z.string().regex(/^[a-fA-F0-9]{64}$/).nullable().optional(),
 });
 export const routeSchema = z.object({
   id,
@@ -17,6 +20,7 @@ export const routeSchema = z.object({
   via: z.string(),
   busType: z.enum(["AC", "Non-AC"]),
   isPinned: z.boolean(),
+  version: z.number().int().positive().optional(),
 });
 export const quickAnnouncementSchema = z.discriminatedUnion("type", [
   z.object({ id, name: z.string(), type: z.literal("MULTIPLE"), audios: z.array(audioSchema) }),
@@ -56,6 +60,26 @@ export type AudioAsset = z.infer<typeof audioSchema>;
 export type RouteSummary = z.infer<typeof routeSchema>;
 export type Bootstrap = z.infer<typeof bootstrapSchema>;
 export type RouteAnnouncements = z.infer<typeof routeAnnouncementsSchema>;
+
+export const offlineSnapshotSchema = z.object({
+  catalog: bootstrapSchema,
+  pinnedRoutes: z.array(routeAnnouncementsSchema).max(3),
+}).refine(({ catalog, pinnedRoutes }) => {
+  const pins = catalog.routes.filter((route) => route.isPinned).map((route) => route.id);
+  return new Set(pins).size === pins.length && pinnedRoutes.length === pins.length &&
+    new Set(pinnedRoutes.map((item) => item.route.id)).size === pins.length &&
+    pinnedRoutes.every((item) => item.route.isPinned && pins.includes(item.route.id) &&
+      item.announcements.every((audio) => audio.contentRevision && audio.sizeBytes));
+}, "Sync must contain every pinned route and verifiable media metadata");
+export type OfflineSnapshot = z.infer<typeof offlineSnapshotSchema>;
+export const syncResponseSchema = z.object({
+  revision: z.string().regex(/^[a-f0-9]{64}$/),
+  serverTime: z.iso.datetime(),
+  offlineUntil: z.iso.datetime(),
+}).and(z.discriminatedUnion("unchanged", [
+  z.object({ unchanged: z.literal(true) }),
+  offlineSnapshotSchema.safeExtend({ unchanged: z.literal(false) }),
+]));
 
 export function formatDuration(seconds: number): string {
   const safe = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;

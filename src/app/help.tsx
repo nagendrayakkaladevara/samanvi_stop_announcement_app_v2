@@ -9,7 +9,7 @@ import {
   PageHeading,
   Screen,
 } from "../ui/components";
-import { colors as c } from "../ui/theme";
+import { useColors } from "../ui/theme";
 
 const topics = [
   {
@@ -26,7 +26,7 @@ const topics = [
   },
   {
     title: "What connection do I need?",
-    copy: "Keep mobile data or Wi-Fi connected. Announcements stream from the service and require an internet connection.",
+    copy: "Pin up to three routes and wait for Ready offline before departure. Their downloaded audio works for 30 days after a successful sync. Refresh applies current updates and removals. Quick announcements and unpinned routes still need internet.",
     action: "Open audio library",
     path: "/library",
   },
@@ -39,6 +39,7 @@ const topics = [
 ] as const;
 
 export default function Help() {
+  const c = useColors();
   const [open, setOpen] = useState<number | null>(0);
   return (
     <Screen title="Help & support" back>

@@ -2,10 +2,10 @@
   "expo": {
     "name": "Samanvi Driver",
     "slug": "samanvi-driver-mobile",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "orientation": "portrait",
     "icon": "./assets/app-icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.samanvitravels.driver.v2"
@@ -45,7 +45,8 @@
           "backgroundColor": "#F5F5F7",
           "image": "./assets/app-icon.png",
           "imageWidth": 160,
-          "resizeMode": "contain"
+          "resizeMode": "contain",
+          "dark": { "backgroundColor": "#111315", "image": "./assets/app-icon.png" }
         }
       ],
       "expo-secure-store",

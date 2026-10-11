@@ -545,9 +545,9 @@ export function confirmAction(
 }
 export function useStartAnnouncement() {
   const playback = usePlayback();
-  return (audio: AudioAsset, allowPhone = false) => {
+  return (audio: AudioAsset, allowPhone = false, playlist?: AudioAsset[]) => {
     const run = () => {
-      void playback.play(audio, allowPhone).then((started) => {
+      void playback.play(audio, allowPhone, playlist).then((started) => {
         if (started) router.push("/player");
       });
     };
@@ -563,11 +563,13 @@ export function useStartAnnouncement() {
 }
 export function AudioRow({
   audio,
+  playlist,
   subtitle,
   last = false,
   title,
 }: {
   audio: AudioAsset;
+  playlist?: AudioAsset[];
   subtitle?: string;
   last?: boolean;
   title?: string;
@@ -597,7 +599,7 @@ export function AudioRow({
       onPress={() =>
         current
           ? router.push("/player")
-          : start(audio)
+           : start(audio, false, playlist)
       }
       style={({ pressed }) => [
         styles.audioRow,

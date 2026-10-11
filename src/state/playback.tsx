@@ -4,6 +4,7 @@ import React, {
   useContext,
   useEffect,
   useRef,
+  useMemo,
   useState,
   type PropsWithChildren,
 } from "react";
@@ -15,8 +16,14 @@ import {
 } from "expo-audio";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import Constants from "expo-constants";
+import * as Crypto from "expo-crypto";
+import { PlaybackAlertOutbox } from "../domain/playback-alert-outbox";
+import { createPlaybackAlertStorage } from "../services/playback-alert-storage";
+import { getCurrentAuthSession, sendPlaybackAlert } from "../services/api";
+import { useAuth } from "./auth";
 import AudioRoute from "../../modules/samanvi-audio-route";
 import { readableError, type AudioAsset } from "../domain/catalog";
+import { adjacentAudio } from "../domain/audio-playlist";
 import {
   isExternal,
   outputWasLost,
@@ -61,7 +68,10 @@ type PlaybackContextValue = {
   local: boolean;
   output: Output;
   message: string | null;
-  play: (audio: AudioAsset, allowPhone?: boolean) => Promise<boolean>;
+  play: (audio: AudioAsset, allowPhone?: boolean, playlist?: AudioAsset[]) => Promise<boolean>;
+  previous: AudioAsset | null;
+  next: AudioAsset | null;
+  skip: (direction: -1 | 1) => Promise<void>;
   pause: () => void;
   resume: () => Promise<void>;
   stop: () => void;
@@ -72,6 +82,10 @@ type PlaybackContextValue = {
 const PlaybackContext = createContext<PlaybackContextValue | null>(null);
 
 export function PlaybackProvider({ children }: PropsWithChildren) {
+  const { session } = useAuth();
+  const userId = session!.user.id;
+  const outbox = useMemo(() => new PlaybackAlertOutbox(createPlaybackAlertStorage(userId), sendPlaybackAlert,
+    () => getCurrentAuthSession()?.user.id === userId), [userId]);
   const player = useAudioPlayer(null, { updateInterval: 250, downloadFirst: false });
   const status = useAudioPlayerStatus(player);
   const library = useLibrary();
@@ -83,6 +97,16 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
   const onlineRef = useRef(online);
   useEffect(() => { onlineRef.current = online; }, [online]);
   const [active, setActive] = useState<AudioAsset | null>(null);
+  const [playlist, setPlaylist] = useState<AudioAsset[]>([]);
+  const playlistRef = useRef<AudioAsset[]>([]);
+  useEffect(() => {
+    if (!online) return;
+    const flush = () => { void outbox.flush().catch(() => undefined); };
+    flush();
+    const timer = setInterval(flush, 30_000);
+    const subscription = AppState.addEventListener("change", (state) => { if (state === "active") flush(); });
+    return () => { clearInterval(timer); subscription.remove(); };
+  }, [online, outbox]);
   const [phase, setPhase] = useState<Phase>("idle");
   const [resolving, setResolving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -243,7 +267,7 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
   }, [preferences.keepAwake, status.playing]);
 
   const play = useCallback(
-    async (audio: AudioAsset, allowPhone = false): Promise<boolean> => {
+    async (audio: AudioAsset, allowPhone = false, queue?: AudioAsset[]): Promise<boolean> => {
       const request = gate.current.next();
       setMessage(null);
       try {
@@ -297,7 +321,17 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
         transition("loading");
         lockScreen(true, audio);
         player.play();
+        const nextPlaylist = queue ?? [audio];
+        playlistRef.current = nextPlaylist;
+        setPlaylist(nextPlaylist);
         repeatRef.current = recordPlayback(repeatRef.current, audio.id);
+        if (repeatRef.current.count > 3) {
+          const event = { eventId: Crypto.randomUUID(), audioId: audio.id, playCount: repeatRef.current.count, playedAt: new Date().toISOString() };
+          void outbox.enqueue(event).then(() => {
+            // Delivery failures stay queued; they must not interrupt playback.
+            if (onlineRef.current) void outbox.flush().catch(() => undefined);
+          }).catch(() => setMessage("Playback started, but the repeat-play alert could not be saved on this device."));
+        }
         return true;
       } catch (failure) {
         if (gate.current.isCurrent(request)) {
@@ -320,6 +354,7 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
       lockScreen,
       resolveAudio,
       localAllowed,
+      outbox,
     ],
   );
 
@@ -337,7 +372,7 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
     void player.seekTo(0).catch(() => undefined);
   }, [player, lockScreen, transition]);
   const replay = useCallback(async () => {
-    if (activeRef.current) await play(activeRef.current, allowPhoneRef.current);
+    if (activeRef.current) await play(activeRef.current, allowPhoneRef.current, playlistRef.current);
   }, [play]);
   const resume = useCallback(async () => {
     if (!activeRef.current) return;
@@ -372,6 +407,12 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
     }
   }, [refreshOutput, preferences.requireSpeaker, replay, player, lockScreen, localAllowed]);
 
+  const previous = adjacentAudio(playlist, active?.id, -1);
+  const next = adjacentAudio(playlist, active?.id, 1);
+  const skip = async (direction: -1 | 1) => {
+    const target = adjacentAudio(playlistRef.current, activeRef.current?.id, direction);
+    if (target) await play(target, allowPhoneRef.current, playlistRef.current);
+  };
   return (
     <PlaybackContext.Provider
       value={{
@@ -384,6 +425,9 @@ export function PlaybackProvider({ children }: PropsWithChildren) {
         output,
         message,
         play,
+        previous,
+        next,
+        skip,
         pause,
         resume,
         stop,

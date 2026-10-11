@@ -9,7 +9,7 @@ export default function Library() {
     <PageHeading title="Passenger announcements" description="Stream the latest announcements from your administrator." />
     <Button title="View Route Announcements" icon="map" onPress={() => router.navigate("/(tabs)/announcements")} />
     <SectionTitle>Quick Announcements</SectionTitle>
-    {audio.length ? <Card>{audio.map((item, index) => <AudioRow key={`${item.id}-${index}`} audio={item} last={index === audio.length - 1} />)}</Card> : null}
+    {audio.length ? <Card>{audio.map((item, index) => <AudioRow key={`${item.id}-${index}`} audio={item} playlist={audio} last={index === audio.length - 1} />)}</Card> : null}
     <Button title="Refresh announcements" icon="refresh-cw" variant="secondary" disabled={!!busy} onPress={() => void refresh()} />
   </Screen>;
 }

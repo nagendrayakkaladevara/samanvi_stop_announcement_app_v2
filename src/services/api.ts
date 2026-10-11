@@ -205,6 +205,11 @@ export const fetchQuickAnnouncements = () => get("/quick-announcements", quickAn
 export const fetchRouteAnnouncements = (id: string) => get(`/routes/${encodeURIComponent(id)}/announcements`, routeAnnouncementsSchema);
 export const fetchAudio = (id: string) => get(`/audios/${encodeURIComponent(id)}`, audioSchema);
 export const fetchConfig = () => get("/config", configSchema);
+export async function sendPlaybackAlert(event: import("../domain/playback-alert-outbox").PlaybackAlertEvent) {
+  await authenticatedRequest("/mobile/announcements/playback-alerts", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(event),
+  });
+}
 export async function syncAnnouncements(revision?: string) {
   const response = await authenticatedRequest("/mobile/announcements/sync", {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ revision }),

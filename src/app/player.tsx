@@ -84,11 +84,12 @@ export default function Player() {
       <View style={s.controls}>
         <View style={s.control}>
           <IconButton
-            name="rotate-ccw"
-            label="Restart announcement"
-            onPress={() => void p.replay()}
+            name="skip-back"
+            label={p.previous ? `Previous audio: ${p.previous.title}` : "No previous audio"}
+            disabled={!p.previous || loading}
+            onPress={() => void p.skip(-1)}
           />
-          <Label style={s.caption}>Restart</Label>
+          <Label style={s.caption}>Previous</Label>
         </View>
         <View style={s.control}>
           <Pressable
@@ -117,14 +118,19 @@ export default function Player() {
         </View>
         <View style={s.control}>
           <IconButton
-            name="square"
-            label="Stop announcement"
-            onPress={p.stop}
+            name="skip-forward"
+            label={p.next ? `Next audio: ${p.next.title}` : "No next audio"}
+            disabled={!p.next || loading}
+            onPress={() => void p.skip(1)}
           />
-          <Label style={s.caption}>Stop</Label>
+          <Label style={s.caption}>Next</Label>
         </View>
       </View>
       <Card style={{ marginTop: 18 }}>
+        <View style={s.controls}>
+          <Button title="Restart" icon="rotate-ccw" variant="quiet" disabled={loading} onPress={() => void p.replay()} />
+          <Button title="Stop" icon="square" variant="quiet" onPress={p.stop} />
+        </View>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Manage audio output"

@@ -46,7 +46,7 @@ export default function RouteAnnouncementsScreen() {
         {status.error ? <><Notice tone="error">{status.error}</Notice><Button title="Retry downloads" variant="secondary" onPress={retryDownloads} /></> : null}
       </> : <Notice>Pin this route on the Audio page to prepare it for offline playback.</Notice>}
       <Label style={{ color: c.muted, fontSize: 13 }}>Tap an announcement to play</Label>
-      {current.announcements.length ? <Card>{current.announcements.map((audio, index) => <AudioRow key={audio.id} audio={audio} title={`${audio.sequence}. ${audio.title}`} subtitle={`Announcement ${audio.sequence}`} last={index === current.announcements.length - 1} />)}</Card> : <EmptyState icon="volume-2" title="No announcements available" description="Your administrator can add announcements to this route." />}
+      {current.announcements.length ? <Card>{current.announcements.map((audio, index) => <AudioRow key={audio.id} audio={audio} playlist={current.announcements} title={`${audio.sequence}. ${audio.title}`} subtitle={`Announcement ${audio.sequence}`} last={index === current.announcements.length - 1} />)}</Card> : <EmptyState icon="volume-2" title="No announcements available" description="Your administrator can add announcements to this route." />}
     </> : null}
     <Button title="Refresh announcements" variant="secondary" disabled={loading} onPress={() => void load(true)} />
   </Screen>;

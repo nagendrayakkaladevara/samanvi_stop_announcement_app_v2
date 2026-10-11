@@ -10,7 +10,7 @@ export default function WelcomeNotes() {
   const audios = group?.type === "MULTIPLE" ? group.audios : [];
   return <Screen title="Welcome Note" back>
     <PageHeading title="Welcome aboard" description="Choose a welcome note for your passengers." />
-    {audios.length ? <Card>{audios.map((audio, index) => <AudioRow key={audio.id} audio={audio} last={index === audios.length - 1} />)}</Card> : !busy && catalog ? <EmptyState icon="volume-2" title="No welcome notes available" description="Your administrator can upload welcome-note audios." /> : null}
+    {audios.length ? <Card>{audios.map((audio, index) => <AudioRow key={audio.id} audio={audio} playlist={audios} last={index === audios.length - 1} />)}</Card> : !busy && catalog ? <EmptyState icon="volume-2" title="No welcome notes available" description="Your administrator can upload welcome-note audios." /> : null}
     <Button title="Refresh welcome notes" variant="secondary" disabled={!!busy} onPress={() => void refresh()} />
   </Screen>;
 }

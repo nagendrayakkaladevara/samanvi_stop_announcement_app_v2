@@ -63,7 +63,6 @@ export function Label({ children, style, ...props }: TextProps) {
 export function Brand() {
   const styles = useStyles(makeStyles);
   return (
-    <View style={{ backgroundColor: "#FFFFFF", borderRadius: 8, padding: 5 }}>
     <Image
       accessibilityLabel="Samanvi Travels"
       accessibilityRole="image"
@@ -71,7 +70,6 @@ export function Brand() {
       source={require("../../assets/samv_logo.png")}
       style={styles.brandLogo}
     />
-    </View>
   );
 }
 export function FadeIn({

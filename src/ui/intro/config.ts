@@ -7,7 +7,7 @@ export const introTiming = {
   dissolve: 2000,
   logo: 2300,
   end: 2600,
-  exit: 180,
+  exit: 220,
   reduced: 450,
 } as const;
 

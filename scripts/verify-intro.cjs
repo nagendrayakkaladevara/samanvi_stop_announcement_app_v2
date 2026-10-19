@@ -38,23 +38,53 @@ async function run() {
       await page.waitForFunction(() => Array.from(document.images).every(image => image.complete));
       await page.clock.runFor(100);
       await page.waitForFunction(() => Array.from(document.images).some(image => image.src.includes("samanvi-bus") && image.naturalWidth === 817));
-      for (const [advance, label] of [[1200, "1300"], [400, "1700"], [600, "2300"]]) {
-        await page.clock.runFor(advance);
-        await page.screenshot({ path: path.join(evidence, `${theme}-${label}.png`) });
-        if (label === "1300") {
-          const opacity = await page.locator('img[src*="samanvi-bus"]').evaluate(image => Number(getComputedStyle(image.parentElement).opacity));
+      let elapsed = 100;
+      for (const time of [300, 600, 900, 1100, 1300, 1700, 1950, 2100, 2300, 2600]) {
+        await page.clock.runFor(time - elapsed);
+        elapsed = time;
+        if ([900, 1100, 1300, 1700, 1950, 2100, 2300].includes(time)) await page.screenshot({ path: path.join(evidence, `${theme}-${time}.png`) });
+        assert.equal(await page.getByTestId("launch-intro").count(), 1, "The 2.6-second sequence must not be dismissed early");
+        if (time === 1300) {
+          const opacity = await page.getByTestId("intro-bus").evaluate(bus => Number(getComputedStyle(bus).opacity));
           assert.ok(opacity > 0.8, `Actual bus should be visible, got opacity ${opacity}`);
         }
+        if (time >= 2300) {
+          assert.equal(await page.getByTestId("intro-logo").evaluate(logo => Number(getComputedStyle(logo).opacity)), 1, "Logo must hold at full opacity");
+          assert.equal(await page.getByTestId("intro-environment").evaluate(scene => Number(getComputedStyle(scene).opacity)), 0, "Scenery must be gone during the clean hold");
+        }
       }
-      await page.clock.runFor(700);
+      await page.clock.runFor(500);
       assert.equal(await page.getByTestId("launch-intro").count(), 0, "Intro must dismiss");
       await page.getByRole("textbox", { name: "Username", exact: true }).waitFor();
+      await context.close();
+    }
+    // Tyre-anchored framing must stay within compact and tall phone viewports.
+    for (const viewport of [{ width: 320, height: 568 }, { width: 430, height: 932 }]) {
+      const context = await browser.newContext({ viewport, reducedMotion: "no-preference" });
+      const page = await context.newPage();
+      page.on("pageerror", error => errors.push(error.message));
+      await page.clock.install({ time: new Date("2026-10-20T12:00:00Z") });
+      await page.clock.pauseAt(new Date("2026-10-20T12:00:01Z"));
+      await page.goto(`http://127.0.0.1:${server.address().port}`);
+      await page.getByTestId("intro-bus").waitFor({ state: "attached" });
+      await page.waitForFunction(() => Array.from(document.images).every(image => image.complete));
+      await page.clock.runFor(1300);
+      const box = await page.getByTestId("intro-bus").boundingBox();
+      assert.ok(box && box.x >= 0 && box.x + box.width <= viewport.width && box.y + box.height <= viewport.height, "Hero cutout must stay in frame");
+      const sceneBox = await page.getByTestId("intro-road").locator("svg").boundingBox();
+      assert.ok(sceneBox && Math.abs(sceneBox.height - viewport.height) < 20, `Highway must use the same viewport coordinates as the bus: ${JSON.stringify({ sceneBox, viewport })}`);
+      await page.screenshot({ path: path.join(evidence, `light-${viewport.width}-1300.png`) });
       await context.close();
     }
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
     const page = await context.newPage();
     page.on("pageerror", error => errors.push(error.message));
+    await page.clock.install({ time: new Date("2026-10-20T12:00:00Z") });
+    await page.clock.pauseAt(new Date("2026-10-20T12:00:01Z"));
     await page.goto(`http://127.0.0.1:${server.address().port}`);
+    await page.getByTestId("launch-intro").waitFor();
+    assert.equal(await page.getByTestId("intro-bus").count(), 0, "Reduced motion must never mount the moving scene");
+    await page.clock.runFor(800);
     await page.getByRole("textbox", { name: "Username", exact: true }).waitFor();
     await page.getByTestId("launch-intro").waitFor({ state: "detached" });
     assert.equal(await page.locator('img[src*="samanvi-bus"]').count(), 0, "Reduced motion must bypass bus/scenery");
@@ -75,7 +105,7 @@ async function run() {
       await context.close();
     }
     assert.deepEqual(errors, [], "No browser runtime errors");
-    console.log("PASS: both themes, actual photo, logo exit, reduced motion, live preference change, failed asset and browser runtime checks.");
+    console.log("PASS: both themes, complete timing/hold, compact/tall framing, actual photo, logo exit, reduced motion, live preference change, failed asset and browser runtime checks.");
   } finally { await browser.close(); server.close(); }
 }
 run().catch(error => { console.error(error); server.close(); process.exitCode = 1; });

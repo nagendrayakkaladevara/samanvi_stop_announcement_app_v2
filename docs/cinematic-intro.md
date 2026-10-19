@@ -14,28 +14,38 @@ Inspect `docs/intro-cutout-review.png` on both theme backgrounds. The original b
 
 The frame uses the cutout's true aspect ratio, with wheel contact anchored to the curved highway rather than arbitrary image-box padding. The same bundled image works offline on both themes.
 
-No new native packages are required. Reanimated drives native transforms/opacity; SVG scenery is static, without per-frame React renders. The same photograph is used throughout: modest perspective/roll and continuous framing, **no fake front-to-rear rotation**. No artificial spinning wheel overlays are added to a photograph. Native motion blur is intentionally not simulated with duplicate ghost buses; the softened trail strokes and camera movement provide the restrained movement cue.
+No new native packages are required. Reanimated drives transforms/opacity and the two light-ribbon paths on the UI thread, without per-frame React renders. Scenery and contact-light gradients are static. The same photograph is used throughout: modest perspective/roll and continuous framing, **no fake front-to-rear rotation**. No artificial spinning wheel overlays are added to a photograph. The softened trail strokes and camera movement provide the restrained movement cue while the real bus stays sharp.
+
+## Refined motion and art direction
+
+- Tonal, gently curved hills, diffused sunrise/evening light and a soft vignette give the photographic bus more breathing room.
+- A single pair of thin blue/red ribbons replaces the doubled trails. They draw along the road, then smoothly interpolate their control points toward the logo's optical centre; the road itself never shrinks like a card.
+- Quintic easing joins position, velocity and acceleration at shot boundaries. The approach is a restrained 0.72× to 1× push-in; the journey follows a curved path into the distance. Roll stays below half a degree and perspective below two degrees.
+- The bus scales about its front-tyre contact point in the same normalized coordinate space as the road. Explicit SVG viewport sizing prevents road/contact drift on short screens. The foreground shares a 1.8% camera pullback; the distant landscape moves more slowly.
+- Radial contact shadows and a restrained headlamp reflection replace platform-specific blur filters. The final wordmark settles by only 1.5% and holds completely still from 2.3–2.6 seconds.
+- The native splash hands off only after theme, layout and image decoding are ready. The existing icon stays visible through preparation. An 1800 ms asset/decode deadline falls back to static branding, and late loads cannot restart the sequence.
+- Sequence completion and overlay removal follow Reanimated completion callbacks rather than wall-clock timers, preserving the full hold and exit even if JS work is delayed. Only actual backgrounding interrupts playback; iOS `inactive` launch notifications do not skip it.
 
 ## Timing
 
 | Time | Scene |
 | --- | --- |
-| 0–300 ms | Existing app icon, fade/scale |
-| 300–600 ms | Highway/trails emerge from below |
-| 600–900 ms | Minimal layered mountains/city, night or sunrise |
+| 0–300 ms | Existing app icon continues from native splash with a subtle scale settle |
+| 300–600 ms | Highway dissolves in; ribbons begin drawing toward the horizon |
+| 600–900 ms | Tonal hills and atmospheric night/sunrise lighting emerge |
 | 900–1300 ms | Actual cutout approaches, peaks at closest framing |
 | 1300–1700 ms | Framing follows as bus recedes |
 | 1700–2000 ms | Bus/environment dissolve; trails converge |
 | 2000–2300 ms | Original blue/red PNG wordmark fades/scales in |
 | 2300–2600 ms | Clean logo hold |
-| after 2600 ms | 180 ms crossfade to already-mounted application |
+| after 2600 ms | 220 ms eased crossfade to already-mounted application |
 
 The root-level overlay stays mounted across ordinary routing/auth changes and is removed once. Backgrounding finishes the intro, rather than replaying a stale journey. Reduced motion bypasses scenery and transforms, using a short static logo with a 100 ms exit. Saved theme restoration completes before the native splash is hidden. If authentication restoration takes longer, hold the final logo rather than exposing a loader or blank frame. Missing/failed cutouts degrade to the short official-brand fallback.
 
 ## Validation checklist
 
 - Run `npm run typecheck`, `npm run lint`, `npm test`, and `npm run export:android`.
-- For browser evidence: `npm run export:web`, then set `SAMANVI_PLAYWRIGHT_ROOT` to a separate Playwright installation and optionally `SAMANVI_BROWSER_EXECUTABLE` to Chromium/Edge, then run `node scripts/verify-intro.cjs`. This checks actual bus visibility in both themes, intro dismissal into the existing login when unauthenticated, reduced-motion bypass, live preference changes, failed-image fallback and browser runtime errors. Paused-clock captures at nominal 1300/1700/2300 ms are in `docs/intro-validation/`; they do not measure native frame rate.
+- For browser evidence: `npm run export:web`, then set `SAMANVI_PLAYWRIGHT_ROOT` to a separate Playwright installation and optionally `SAMANVI_BROWSER_EXECUTABLE` to Chromium/Edge, then run `node scripts/verify-intro.cjs`. This checks actual bus visibility in both themes, the complete duration/clean logo hold, 320×568 and 430×932 framing and shared road coordinates, dismissal into the existing login when unauthenticated, reduced-motion bypass, live preference changes, failed-image fallback and browser runtime errors. Paused-clock captures at nominal 900/1100/1300/1700/1950/2100/2300 ms are in `docs/intro-validation/`; they do not measure native frame rate.
 - Test a **release build** on Android and iOS; Expo Go/dev client do not reproduce the native splash faithfully.
 - Cold launch in light/dark/system modes and with a saved theme different from system. Inspect splash-to-intro handoff and final exit for flashes.
 - With the approved bus configured, record the entire timeline on a low-end physical device; inspect 900/1300/1700/2000/2300 ms frames, road contact, alpha edges and readable actual branding. Tune framing to the source photo as needed.
@@ -48,7 +58,7 @@ The actual bus asset blocker is resolved. Physical-device visual/performance app
 ### Current verification
 
 - TypeScript and ESLint: passed.
-- Unit tests: 39 passed, including photo-pixel preservation, alpha-mask/background removal, size budget and camera continuity.
+- Unit tests: 41 passed, including photo-pixel preservation, alpha-mask/background removal, size budget, camera continuity/acceleration and non-empty scene overlaps.
 - Production Android and web exports: passed; both include the 591 KB cutout, not the original source photograph.
-- Production-web smoke test in Edge: passed for both themes, final dismissal, reduced motion, live preference change, failed cutout loading and zero page runtime errors.
-- Visual evidence: `intro-cutout-review.png` and `intro-validation/{dark,light}-{1300,1700,2300}.png`.
+- Production-web smoke test in Edge: passed for both themes, duration/hold, compact/tall framing, road viewport alignment, final dismissal, reduced motion, live preference change, failed cutout loading and zero page runtime errors.
+- Visual evidence: `intro-cutout-review.png` and the refreshed shot/transition captures in `intro-validation/`.

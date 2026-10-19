@@ -7,6 +7,11 @@ import { LibraryProvider } from "../state/library";
 import { PlaybackProvider } from "../state/playback";
 import { ThemeProvider, useColors, useTheme } from "../ui/theme";
 import { LoadingState } from "../ui/components";
+import * as SplashScreen from "expo-splash-screen";
+import { LaunchIntro } from "../ui/intro/launch-intro";
+
+// Retain the OS launch surface until the themed intro is ready to draw.
+if (Platform.OS !== "web") void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 export { ErrorBoundary } from "expo-router";
 
@@ -34,13 +39,18 @@ function Navigator() {
   return authenticated ? <LibraryProvider key={session!.user.id}><PlaybackProvider>{stack}</PlaybackProvider></LibraryProvider> : stack;
 }
 
+function Startup() {
+  const { loading } = useAuth();
+  return <LaunchIntro ready={!loading}><Navigator /></LaunchIntro>;
+}
+
 function ThemedRoot() {
   const { colors, dark } = useTheme();
   return (
     <SafeAreaProvider>
       <View style={{ flex: 1, backgroundColor: colors.canvas }}>
         <View style={{ flex: 1, width: "100%", maxWidth: Platform.OS === "web" ? 480 : undefined, alignSelf: "center" }}>
-          <AuthProvider><StatusBar style={dark ? "light" : "dark"} /><Navigator /></AuthProvider>
+          <AuthProvider><StatusBar style={dark ? "light" : "dark"} /><Startup /></AuthProvider>
         </View>
       </View>
     </SafeAreaProvider>

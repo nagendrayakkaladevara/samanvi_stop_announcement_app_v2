@@ -30,20 +30,23 @@ export const darkColors: Palette = {
   onAccent: "#211418", switchTrack: "#535963", canvas: "#0A0C0E",
 };
 export type ThemeMode = "light" | "dark" | "system";
-type ThemeValue = { colors: Palette; mode: ThemeMode; dark: boolean; setMode: (mode: ThemeMode) => Promise<void> };
-const ThemeContext = createContext<ThemeValue>({ colors: lightColors, mode: "light", dark: false, setMode: async () => {} });
+type ThemeValue = { colors: Palette; mode: ThemeMode; dark: boolean; ready: boolean; setMode: (mode: ThemeMode) => Promise<void> };
+const ThemeContext = createContext<ThemeValue>({ colors: lightColors, mode: "light", dark: false, ready: false, setMode: async () => {} });
 const key = "samanvi.theme.v1";
 
 export function ThemeProvider({ children }: PropsWithChildren) {
   const [mode, setModeState] = useState<ThemeMode>("light");
+  const [ready, setReady] = useState(false);
   const scheme = useColorScheme();
   const dark = mode === "dark" || (mode === "system" && scheme === "dark");
   const colors = dark ? darkColors : lightColors;
   useEffect(() => {
     let active = true;
-    void (Platform.OS === "web" ? Promise.resolve(globalThis.localStorage?.getItem(key)) : SecureStore.getItemAsync(key))
+    // Resolve storage inside the promise as browsers can throw on localStorage access.
+    void Promise.resolve().then(() => Platform.OS === "web" ? globalThis.localStorage?.getItem(key) : SecureStore.getItemAsync(key))
       .then((saved) => { if (active && (saved === "light" || saved === "dark" || saved === "system")) setModeState(saved); })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => { if (active) setReady(true); });
     return () => { active = false; };
   }, []);
   useEffect(() => {
@@ -57,7 +60,7 @@ export function ThemeProvider({ children }: PropsWithChildren) {
     else await SecureStore.setItemAsync(key, next);
     setModeState(next);
   };
-  return <ThemeContext.Provider value={{ colors, dark, mode, setMode }}>{children}</ThemeContext.Provider>;
+  return <ThemeContext.Provider value={{ colors, dark, mode, ready, setMode }}>{children}</ThemeContext.Provider>;
 }
 export const useTheme = () => useContext(ThemeContext);
 export const useColors = () => useTheme().colors;

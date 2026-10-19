@@ -1,10 +1,3 @@
-import type { ImageSourcePropType } from "react-native";
-
-/** Only an approved cutout of the actual Samanvi coach may be used here.
- * See docs/cinematic-intro.md. Do not substitute a stock vehicle.
- */
-export const busCutout: ImageSourcePropType | null = null;
-
 export const introTiming = {
   icon: 300,
   road: 600,

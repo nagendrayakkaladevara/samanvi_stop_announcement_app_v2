@@ -9,7 +9,7 @@ export function busPose(milliseconds: number) {
   const approach = a * a * (3 - 2 * a);
   const journey = j * j * (3 - 2 * j);
   return {
-    x: 125 - 137 * approach + 48 * journey,
+    x: 125 - 105 * approach + 16 * journey,
     y: 55 - 55 * approach - 145 * journey,
     scale: 0.35 + 0.65 * approach - 0.9 * journey,
     roll: -1.2 + 1.45 * approach - 1.05 * journey,

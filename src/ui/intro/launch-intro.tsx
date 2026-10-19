@@ -4,7 +4,8 @@ import { Asset } from "expo-asset";
 import * as SplashScreen from "expo-splash-screen";
 import Animated, { cancelAnimation, Easing, Extrapolation, interpolate, ReduceMotion, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useTheme } from "../theme";
-import { busCutout, introDuration, introTiming as timing } from "./config";
+import { introDuration, introTiming as timing } from "./config";
+import { busAspectRatio, busCutout } from "./assets";
 import { Highway, Landscape } from "./highway";
 import { busPose } from "./motion";
 
@@ -28,9 +29,11 @@ export function LaunchIntro({ children, ready }: PropsWithChildren<{ ready: bool
     let active = true;
     // A bad/missing cutout fails closed to official branding, never a stock bus.
     const assets = Asset.loadAsync([icon, logo]).catch(() => undefined);
-    const bus = typeof busCutout === "number"
-      ? Asset.loadAsync(busCutout).catch(() => { if (active) setSource(null); })
-      : Promise.resolve();
+    // Metro uses numeric module IDs natively and URI descriptors on web.
+    const busModule = typeof busCutout === "number" ? busCutout : !Array.isArray(busCutout) ? busCutout.uri : undefined;
+    const bus = busModule
+      ? Asset.loadAsync(busModule).catch(() => { if (active) setSource(null); })
+      : Promise.resolve().then(() => { if (active) setSource(null); });
     const preference = Platform.OS === "web" && typeof window !== "undefined"
       ? Promise.resolve(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? true)
       : AccessibilityInfo.isReduceMotionEnabled().catch(() => true);
@@ -160,8 +163,8 @@ const styles = StyleSheet.create({
   brandCenter: { ...StyleSheet.absoluteFill, justifyContent: "center", alignItems: "center" },
   icon: { width: 160, height: 160 },
   logo: { width: "66%", maxWidth: 290, height: 76 },
-  busFrame: { position: "absolute", top: "47%", left: "5%", width: "90%", aspectRatio: 1.45 },
+  busFrame: { position: "absolute", bottom: "29%", left: "6%", width: "86%", aspectRatio: busAspectRatio },
   bus: { flex: 1 },
   busImage: { width: "100%", height: "100%" },
-  shadow: { position: "absolute", bottom: "3%", left: "12%", width: "78%", height: "8%", borderRadius: 100, opacity: 0.25, filter: [{ blur: 9 }] },
+  shadow: { position: "absolute", bottom: "9%", left: "14%", width: "79%", height: "10%", borderRadius: 100, transform: [{ rotate: "10deg" }], opacity: 0.23, filter: [{ blur: 7 }] },
 });

@@ -1,17 +1,18 @@
 # Cinematic launch intro
 
-## Asset blocker — not ready for visual sign-off
+## Actual bus integrated
 
-The chat storyboard is a visual reference, not a source photograph available on disk. No actual bus photograph or transparent cutout was accessible in this checkout. **No bus has been fabricated, downloaded, or substituted.** Background removal and bus-specific visual validation therefore remain pending.
+The user supplied `assets/intro/samanvi-bus-original.png` (865 × 466). Its visible coach pixels are preserved in `assets/intro/samanvi-bus.png` (817 × 459, 591,496 bytes). A hand-traced, supersampled alpha mask removes the road, guardrail, vegetation, water and lower-left inset, including the open gap behind the exterior mirror. There is no generated vehicle, repainted lettering, recoloring or invented rear view.
 
-The app currently shows the official logo for 450 ms, then crossfades into the existing authenticated home or login screen. It does **not** claim to show the completed moving-bus animation. The complete 2.5D timeline is implemented but only enabled when an approved actual-bus cutout is configured.
+The actual-photo cinematic sequence is **enabled** via `src/ui/intro/assets.ts`. The 450 ms official-logo fallback remains only for reduced motion or failed asset loading. The source image is retained for reproducibility but is not imported into the production bundle.
 
-## Supply the actual bus
+## Reproduce / review the cutout
 
-1. Save the original front-three-quarter photograph locally. Extract the coach using a careful foreground mask (include mirrors, headlights, wheels; exclude the original ground/shadow). Preserve all original body colors, lettering, curtains and reflections. Do not use a screenshot cropped from the storyboard.
-2. Export a tightly cropped, transparent sRGB PNG to `assets/intro/samanvi-bus.png`. Target 1000–1200 px width, preferably below 600 KB. Inspect the alpha edges on both light and dark backgrounds; no white halo or clipped mirrors. Keep wheels along the bottom of the image so the independent contact shadow aligns correctly.
-3. In `src/ui/intro/config.ts`, replace `null` with `require("../../../assets/intro/samanvi-bus.png")`. Use a bundled static asset, not a remote URI (startup must work offline).
-4. Update the asset-blocker test to verify the configured asset rather than `null`. Calibrate bus framing/shadow against the actual cutout before approving the PR.
+Run `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare-intro-bus.ps1` from the project root on Windows after `npm ci`. It uses Windows System.Drawing and the existing Expo image-tooling `pngjs` package (no new dependencies). The hand-traced mask is intentionally specific to this photograph's dimensions. Clearing invisible RGB pixels and lossless adaptive PNG filtering reduce the initial 990,894-byte cutout to 591,496 bytes without changing visible pixels. No upscaling or color quantization is applied.
+
+Inspect `docs/intro-cutout-review.png` on both theme backgrounds. The original body, windshield lettering, curtains, striped livery, mirror and tyres remain intact. The source photo's daylight reflections remain natural photographic pixels, including in the night scene; a single source view cannot provide physically relit 3D geometry.
+
+The frame uses the cutout's true aspect ratio, with wheel contact anchored to the curved highway rather than arbitrary image-box padding. The same bundled image works offline on both themes.
 
 No new native packages are required. Reanimated drives native transforms/opacity; SVG scenery is static, without per-frame React renders. The same photograph is used throughout: modest perspective/roll and continuous framing, **no fake front-to-rear rotation**. No artificial spinning wheel overlays are added to a photograph. Native motion blur is intentionally not simulated with duplicate ghost buses; the softened trail strokes and camera movement provide the restrained movement cue.
 
@@ -34,6 +35,7 @@ The root-level overlay stays mounted across ordinary routing/auth changes and is
 ## Validation checklist
 
 - Run `npm run typecheck`, `npm run lint`, `npm test`, and `npm run export:android`.
+- For browser evidence: `npm run export:web`, then set `SAMANVI_PLAYWRIGHT_ROOT` to a separate Playwright installation and optionally `SAMANVI_BROWSER_EXECUTABLE` to Chromium/Edge, then run `node scripts/verify-intro.cjs`. This checks actual bus visibility in both themes, intro dismissal into the existing login when unauthenticated, reduced-motion bypass, live preference changes, failed-image fallback and browser runtime errors. Paused-clock captures at nominal 1300/1700/2300 ms are in `docs/intro-validation/`; they do not measure native frame rate.
 - Test a **release build** on Android and iOS; Expo Go/dev client do not reproduce the native splash faithfully.
 - Cold launch in light/dark/system modes and with a saved theme different from system. Inspect splash-to-intro handoff and final exit for flashes.
 - With the approved bus configured, record the entire timeline on a low-end physical device; inspect 900/1300/1700/2000/2300 ms frames, road contact, alpha edges and readable actual branding. Tune framing to the source photo as needed.
@@ -41,4 +43,12 @@ The root-level overlay stays mounted across ordinary routing/auth changes and is
 - Enable reduced motion (including browser preference); verify no moving scenery. Test toggling it during playback.
 - Test cold launch offline, denied browser storage, failed asset load, slow auth restore, compact/tall screens, and screen reader focus after the overlay disappears.
 
-Physical-device visual/performance approval is outstanding until the real asset is supplied. Automated timing tests are not a substitute for that approval.
+The actual bus asset blocker is resolved. Physical-device visual/performance approval, authenticated-home handoff and release-build native splash checks remain outstanding. Browser screenshots and automated tests are not substitutes for those checks.
+
+### Current verification
+
+- TypeScript and ESLint: passed.
+- Unit tests: 39 passed, including photo-pixel preservation, alpha-mask/background removal, size budget and camera continuity.
+- Production Android and web exports: passed; both include the 591 KB cutout, not the original source photograph.
+- Production-web smoke test in Edge: passed for both themes, final dismissal, reduced motion, live preference change, failed cutout loading and zero page runtime errors.
+- Visual evidence: `intro-cutout-review.png` and `intro-validation/{dark,light}-{1300,1700,2300}.png`.

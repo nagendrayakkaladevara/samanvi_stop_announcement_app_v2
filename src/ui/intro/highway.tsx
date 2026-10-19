@@ -2,17 +2,17 @@ import React from "react";
 import { StyleSheet } from "react-native";
 import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, RadialGradient, Rect, Stop } from "react-native-svg";
 
-export const highwayCurve = "M 65 920 C -120 730 440 695 300 560 C 225 488 127 500 202 438 C 223 420 240 407 244 390";
-const roadSilhouette = "M -60 920 C -210 740 415 701 276 570 C 211 504 116 505 196 433 C 221 414 238 405 244 390 L 246 390 C 243 413 232 430 213 445 C 158 492 274 480 346 547 C 490 700 50 772 215 920 Z";
+export const highwayCurve = "M 65 920 C -50 770 450 700 210 590 C 110 545 68 498 202 438 C 223 420 240 407 244 390";
+const roadSilhouette = "M -60 920 C -150 760 390 715 175 610 C 50 562 41 505 196 433 C 221 414 238 405 244 390 L 246 390 C 243 413 232 430 213 445 C 118 493 135 521 245 570 C 550 715 100 800 215 920 Z";
 
 function trailCurve(offset: number) {
-  return `M ${65 + offset} 920 C ${-120 + offset} 730 ${440 + offset * 0.6} 695 ${300 + offset * 0.35} 560 C ${225 + offset * 0.25} 488 ${127 + offset * 0.12} 500 ${202 + offset * 0.07} 438 C 223 420 240 407 244 390`;
+  return `M ${65 + offset} 920 C ${-50 + offset} 770 ${450 + offset * 0.6} 700 ${210 + offset * 0.35} 590 C ${110 + offset * 0.25} 545 ${68 + offset * 0.12} 498 ${202 + offset * 0.07} 438 C 223 420 240 407 244 390`;
 }
 
 /** Static vector layers: only their enclosing native views animate per frame. */
 export function Landscape({ dark }: { dark: boolean }) {
   return (
-    <Svg style={StyleSheet.absoluteFill} viewBox="0 0 400 860" preserveAspectRatio="xMidYMid slice">
+    <Svg style={StyleSheet.absoluteFill} viewBox="0 0 400 860" preserveAspectRatio="none">
       <Defs>
         <LinearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
           <Stop offset="0" stopColor={dark ? "#040C19" : "#DCE9F4"} />
@@ -48,7 +48,7 @@ export function Landscape({ dark }: { dark: boolean }) {
 
 export function Highway({ dark, trailsOnly = false }: { dark: boolean; trailsOnly?: boolean }) {
   return (
-    <Svg style={StyleSheet.absoluteFill} viewBox="0 0 400 860" preserveAspectRatio="xMidYMid slice">
+    <Svg style={StyleSheet.absoluteFill} viewBox="0 0 400 860" preserveAspectRatio="none">
       <Defs>
         <LinearGradient id="asphalt" x1="0" y1="0" x2="0" y2="1">
           <Stop offset="0" stopColor={dark ? "#1D2B3C" : "#899398"} />

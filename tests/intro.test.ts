@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { busCutout, introDuration, introTiming } from "../src/ui/intro/config";
+import { introDuration, introTiming } from "../src/ui/intro/config";
 import { busPose } from "../src/ui/intro/motion";
 
 test("cinematic intro follows the 2.6 second storyboard", () => {
@@ -14,7 +14,6 @@ test("reduced motion bypasses the journey even with a bus asset", () => {
 });
 
 test("missing approved photo uses a short branded fallback, not an empty journey", () => {
-  assert.equal(busCutout, null);
   assert.equal(introDuration(false, false), 450);
 });
 

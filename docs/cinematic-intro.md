@@ -22,6 +22,7 @@ No new native packages are required. Reanimated drives transforms/opacity and th
 - A single pair of thin blue/red ribbons replaces the doubled trails. They draw along the road, then smoothly interpolate their control points toward the logo's optical centre; the road itself never shrinks like a card.
 - Quintic easing joins position, velocity and acceleration at shot boundaries. The approach is a restrained 0.72× to 1× push-in; the journey follows a curved path into the distance. Roll stays below half a degree and perspective below two degrees.
 - The bus scales about its front-tyre contact point in the same normalized coordinate space as the road. Explicit SVG viewport sizing prevents road/contact drift on short screens. The foreground shares a 1.8% camera pullback; the distant landscape moves more slowly.
+- The tyre's transform origin uses numeric `[x, y, 0]` coordinates computed from the image size. RN 0.86's string parser mishandles decimal percentages such as `50.8% 98.5%`; the numeric tuple avoids the Expo/native Z-position invariant while preserving the exact contact point. A regression test runs the installed React Native DEV style processor, which browser-only checks do not exercise.
 - Radial contact shadows and a restrained headlamp reflection replace platform-specific blur filters. The final wordmark settles by only 1.5% and holds completely still from 2.3–2.6 seconds.
 - The native splash hands off only after theme, layout and image decoding are ready. The existing icon stays visible through preparation. An 1800 ms asset/decode deadline falls back to static branding, and late loads cannot restart the sequence.
 - Sequence completion and overlay removal follow Reanimated completion callbacks rather than wall-clock timers, preserving the full hold and exit even if JS work is delayed. Only actual backgrounding interrupts playback; iOS `inactive` launch notifications do not skip it.
@@ -58,7 +59,8 @@ The actual bus asset blocker is resolved. Physical-device visual/performance app
 ### Current verification
 
 - TypeScript and ESLint: passed.
-- Unit tests: 41 passed, including photo-pixel preservation, alpha-mask/background removal, size budget, camera continuity/acceleration and non-empty scene overlaps.
+- Unit tests: 42 passed, including the native transform-origin validator, photo-pixel preservation, alpha-mask/background removal, size budget, camera continuity/acceleration and non-empty scene overlaps.
 - Production Android and web exports: passed; both include the 591 KB cutout, not the original source photograph.
 - Production-web smoke test in Edge: passed for both themes, duration/hold, compact/tall framing, road viewport alignment, final dismissal, reduced motion, live preference change, failed cutout loading and zero page runtime errors.
 - Visual evidence: `intro-cutout-review.png` and the refreshed shot/transition captures in `intro-validation/`.
+- Expo Doctor 1.21.5: 20/21 checks passed. The remaining version check recommends newer SDK 57 patches for nine Expo packages (`expo`, `@expo/metro-runtime`, `expo-asset`, `expo-constants`, `expo-crypto`, `expo-dev-client`, `expo-linking`, `expo-router`, `expo-splash-screen`). No dependency upgrades were made as part of the transform-origin fix.

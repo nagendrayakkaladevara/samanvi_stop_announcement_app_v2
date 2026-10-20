@@ -4,7 +4,7 @@ import Animated, { useAnimatedStyle, useDerivedValue } from "react-native-reanim
 import { useTheme } from "../theme";
 import { busAspectRatio, introIcon, introLogo } from "./assets";
 import { BusContact, Highway, Landscape, RoadTrails } from "./highway";
-import { busPose, sceneFrame } from "./motion";
+import { busPose, busTransformOrigin, sceneFrame } from "./motion";
 import { useLaunchSequence } from "./use-launch-sequence";
 
 /** One continuous shot above the existing navigator; never a navigation route. */
@@ -18,6 +18,7 @@ export function LaunchIntro({ children, ready }: PropsWithChildren<{ ready: bool
   const frame = useDerivedValue(() => sceneFrame(clock.value));
   const busWidth = size.width * 0.82;
   const busHeight = busWidth / busAspectRatio;
+  const transformOrigin = busTransformOrigin(busWidth, busHeight);
   const overlayStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
   const iconStyle = useAnimatedStyle(() => ({
     opacity: !started ? 1 : cinematic ? frame.value.iconOpacity : 0,
@@ -34,8 +35,8 @@ export function LaunchIntro({ children, ready }: PropsWithChildren<{ ready: bool
     return {
       opacity: frame.value.busOpacity,
       transform: [
-        { translateX: pose.x * size.width / 400 - busWidth * 0.508 },
-        { translateY: pose.y * size.height / 860 - busHeight * 0.985 },
+        { translateX: pose.x * size.width / 400 - transformOrigin[0] },
+        { translateY: pose.y * size.height / 860 - transformOrigin[1] },
         { perspective: 1200 },
         { scale: pose.scale },
         { rotateZ: `${pose.roll}deg` },
@@ -61,7 +62,7 @@ export function LaunchIntro({ children, ready }: PropsWithChildren<{ ready: bool
         <Animated.View style={[StyleSheet.absoluteFill, cameraStyle]} pointerEvents="none">
           <Animated.View testID="intro-road" style={[StyleSheet.absoluteFill, roadStyle]}><Highway dark={dark} /></Animated.View>
           <RoadTrails dark={dark} frame={frame} />
-          <Animated.View testID="intro-bus" style={[styles.bus, { width: busWidth, height: busHeight }, busStyle]}>
+          <Animated.View testID="intro-bus" style={[styles.bus, { width: busWidth, height: busHeight, transformOrigin }, busStyle]}>
             <BusContact dark={dark} />
             {source && <Image source={source} resizeMode="contain" style={styles.busImage} onLoad={() => imageLoaded(4)} onError={failBus} fadeDuration={0} />}
           </Animated.View>
@@ -83,6 +84,6 @@ const styles = StyleSheet.create({
   brandCenter: { ...StyleSheet.absoluteFill, justifyContent: "center", alignItems: "center" },
   icon: { width: 160, height: 160 },
   logo: { width: "64%", maxWidth: 280, aspectRatio: 400 / 98 },
-  bus: { position: "absolute", top: 0, left: 0, transformOrigin: "50.8% 98.5%" },
+  bus: { position: "absolute", top: 0, left: 0 },
   busImage: { width: "100%", height: "100%" },
 });

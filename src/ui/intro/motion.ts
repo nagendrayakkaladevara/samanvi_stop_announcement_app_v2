@@ -1,5 +1,12 @@
 import { introTiming as timing } from "./config";
 
+/** Numeric coordinates bypass RN 0.86's decimal-percentage string parser.
+ * The explicit numeric Z is required by the native style validator.
+ */
+export function busTransformOrigin(width: number, height: number): [number, number, number] {
+  return [width * 0.508, height * 0.985, 0];
+}
+
 /** Quintic easing: position, velocity AND acceleration meet at scene boundaries. */
 export function smoothProgress(time: number, from: number, to: number) {
   "worklet";

@@ -41,7 +41,8 @@ export function ThemeProvider({ children }: PropsWithChildren) {
   const colors = dark ? darkColors : lightColors;
   useEffect(() => {
     let active = true;
-    void (Platform.OS === "web" ? Promise.resolve(globalThis.localStorage?.getItem(key)) : SecureStore.getItemAsync(key))
+    // Resolve storage inside the promise as browsers can throw on localStorage access.
+    void Promise.resolve().then(() => Platform.OS === "web" ? globalThis.localStorage?.getItem(key) : SecureStore.getItemAsync(key))
       .then((saved) => { if (active && (saved === "light" || saved === "dark" || saved === "system")) setModeState(saved); })
       .catch(() => undefined);
     return () => { active = false; };
